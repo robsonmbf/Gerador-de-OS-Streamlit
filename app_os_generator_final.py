@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt # Importa a classe Pt para definir o tamanho da fonte
 import os
 import zipfile
 from io import BytesIO
@@ -62,17 +62,14 @@ def carregar_planilha(arquivo):
         st.error(f"Erro ao ler o ficheiro Excel: {e}")
         return None
 
-# --- FUNÇÃO DE SUBSTITUIÇÃO CORRIGIDA ---
+# --- FUNÇÃO DE SUBSTITUIÇÃO COM ESTILO DE FONTE ---
 def substituir_placeholders(doc, contexto):
     """
-    Substitui os placeholders em todo o documento de forma segura,
-    lidando com placeholders fragmentados e parágrafos vazios.
+    Substitui os placeholders em todo o documento, aplicando o estilo de fonte desejado.
     """
     # Processa parágrafos no corpo do documento
     for p in doc.paragraphs:
-        # Pega o texto completo do parágrafo para verificar a presença da chave
         full_text = "".join(run.text for run in p.runs)
-        # Se não houver texto, pula para o próximo parágrafo
         if not full_text.strip():
             continue
             
@@ -81,13 +78,15 @@ def substituir_placeholders(doc, contexto):
             if key in full_text:
                 full_text = full_text.replace(key, str(value))
         
-        # Apenas modifica o parágrafo se o texto foi alterado
         if original_text != full_text:
-            # Limpa todos os 'runs' existentes no parágrafo
             for run in p.runs:
                 run.text = ''
-            # Adiciona o novo texto em um novo 'run'
-            p.add_run(full_text)
+            
+            # Adiciona o novo texto e aplica o estilo
+            new_run = p.add_run(full_text)
+            font = new_run.font
+            font.name = 'Calibri'
+            font.size = Pt(11)
 
     # Processa parágrafos dentro de tabelas
     for table in doc.tables:
@@ -106,7 +105,12 @@ def substituir_placeholders(doc, contexto):
                     if original_text != full_text:
                         for run in p.runs:
                             run.text = ''
-                        p.add_run(full_text)
+                        
+                        # Adiciona o novo texto e aplica o estilo
+                        new_run = p.add_run(full_text)
+                        font = new_run.font
+                        font.name = 'Calibri'
+                        font.size = Pt(11)
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, modelo_doc_carregado, logo_path=None):
     """Gera uma única Ordem de Serviço."""
@@ -114,7 +118,6 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
 
     if logo_path:
         try:
-            # Limpa o parágrafo antes de adicionar a imagem para evitar sobreposição
             p = doc.tables[0].cell(0, 0).paragraphs[0]
             for run in p.runs:
                 run.text = ''
