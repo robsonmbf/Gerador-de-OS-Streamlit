@@ -225,29 +225,39 @@ else:
         with st.expander("🦺 Adicionar EPIs"):
             epis_manuais = st.text_area("EPIs Adicionais (separados por vírgula)")
 
+        # --- SEÇÃO DE MEDIÇÕES CORRIGIDA COM on_click ---
         with st.expander("📊 Adicionar Medições Ambientais"):
+            # Funções de callback para manipular o estado
+            def adicionar_medicao():
+                agente = st.session_state.agente_input
+                valor = st.session_state.valor_input
+                unidade = st.session_state.unidade_input
+                if agente and valor:
+                    medicao_str = f"{agente}: {valor} {unidade}"
+                    st.session_state.medicoes_adicionadas.append(medicao_str)
+                    # Limpa os campos de input
+                    st.session_state.agente_input = ""
+                    st.session_state.valor_input = ""
+                else:
+                    st.warning("Preencha o Agente e o Valor para adicionar uma medição.")
+            
+            def limpar_medicoes():
+                st.session_state.medicoes_adicionadas = []
+
+            # Interface de usuário
             col1, col2, col3 = st.columns([2,1,1])
             with col1:
-                agente_medicao = st.text_input("Agente/Fonte do Risco", key="agente_medicao")
+                st.text_input("Agente/Fonte do Risco", key="agente_input")
             with col2:
-                valor_medicao = st.text_input("Valor Medido", key="valor_medicao")
+                st.text_input("Valor Medido", key="valor_input")
             with col3:
-                unidade_medicao = st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_medicao")
+                st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_input")
 
-            col_btn1, col_btn2, col_btn3 = st.columns([1,1,2])
+            col_btn1, col_btn2, _ = st.columns([1,1,2])
             with col_btn1:
-                if st.button("Adicionar Medição"):
-                    if agente_medicao and valor_medicao:
-                        medicao_str = f"{agente_medicao}: {valor_medicao} {unidade_medicao}"
-                        st.session_state.medicoes_adicionadas.append(medicao_str)
-                        # Limpa os campos após adicionar (opcional, mas melhora a usabilidade)
-                        st.session_state.agente_medicao = ""
-                        st.session_state.valor_medicao = ""
-                    else:
-                        st.warning("Preencha o Agente e o Valor para adicionar uma medição.")
+                st.button("Adicionar Medição", on_click=adicionar_medicao)
             with col_btn2:
-                if st.button("Limpar Medições"):
-                    st.session_state.medicoes_adicionadas = []
+                st.button("Limpar Lista", on_click=limpar_medicoes)
 
             if st.session_state.medicoes_adicionadas:
                 st.write("**Medições Adicionadas:**")
