@@ -387,33 +387,62 @@ st.markdown("""
     }
     /* Correção para visibilidade do texto nas tabelas */
     .stDataFrame {
-        background-color: white;
+        background-color: white !important;
     }
     .stDataFrame table {
         background-color: white !important;
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
     }
     .stDataFrame th {
         background-color: #f9fafb !important;
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
         font-weight: 600;
     }
     .stDataFrame td {
         background-color: white !important;
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
     }
     /* Correção para texto em elementos de entrada */
     .stTextInput > div > div > input {
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
         background-color: white !important;
     }
     .stTextArea > div > div > textarea {
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
         background-color: white !important;
     }
     .stSelectbox > div > div > div {
-        color: black !important; /* Força a cor do texto para preto */
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
         background-color: white !important;
+    }
+    .stMultiSelect > div > div > div {
+        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
+        background-color: white !important;
+    }
+    /* Correção para tabelas vazias */
+    .element-container div[data-testid="stDataFrame"] {
+        background-color: white !important;
+    }
+    /* Força cor do texto em todos os elementos */
+    div[data-testid="stDataFrame"] * {
+        color: #1f2937 !important;
+    }
+    /* Correção específica para células vazias */
+    .stDataFrame tbody tr td {
+        background-color: white !important;
+        color: #1f2937 !important;
+    }
+    /* Estilo para grupos de riscos */
+    .risk-group {
+        background: #f8fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+        border: 1px solid #e2e8f0;
+    }
+    .risk-group h4 {
+        color: #1e40af;
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -489,20 +518,76 @@ if arquivo_funcionarios:
             
             st.dataframe(df_funcionarios_filtrados[colunas_para_mostrar], use_container_width=True)
         
-        # --- Configuração de Riscos ---
-        st.markdown('<div class="section-header"><h3>⚠️ Configuração de Riscos</h3></div>', unsafe_allow_html=True)
+        # --- Configuração de Riscos por Grupo ---
+        st.markdown('<div class="section-header"><h3>⚠️ Configuração de Riscos por Categoria</h3></div>', unsafe_allow_html=True)
+        
+        # Organizar riscos por categoria
+        categorias = {
+            'fisico': '🔥 Riscos Físicos',
+            'quimico': '⚗️ Riscos Químicos', 
+            'biologico': '🦠 Riscos Biológicos',
+            'ergonomico': '🏃 Riscos Ergonômicos',
+            'acidente': '⚠️ Riscos de Acidentes'
+        }
+        
+        riscos_selecionados = []
+        
+        # Criar abas para cada categoria
+        tabs = st.tabs(list(categorias.values()))
+        
+        for i, (categoria, nome_categoria) in enumerate(categorias.items()):
+            with tabs[i]:
+                st.markdown(f'<div class="risk-group">', unsafe_allow_html=True)
+                
+                # Filtrar riscos da categoria
+                riscos_categoria = df_pgr[df_pgr['categoria'] == categoria]['risco'].tolist()
+                
+                if riscos_categoria:
+                    # Checkbox para selecionar todos da categoria
+                    selecionar_todos = st.checkbox(f"Selecionar todos os {nome_categoria.lower()}", key=f"todos_{categoria}")
+                    
+                    if selecionar_todos:
+                        riscos_selecionados_categoria = st.multiselect(
+                            f"Riscos selecionados:",
+                            riscos_categoria,
+                            default=riscos_categoria,
+                            key=f"riscos_{categoria}"
+                        )
+                    else:
+                        riscos_selecionados_categoria = st.multiselect(
+                            f"Selecionar riscos específicos:",
+                            riscos_categoria,
+                            key=f"riscos_{categoria}"
+                        )
+                    
+                    riscos_selecionados.extend(riscos_selecionados_categoria)
+                    
+                    # Mostrar possíveis danos dos riscos selecionados
+                    if riscos_selecionados_categoria:
+                        st.subheader("Possíveis Danos:")
+                        for risco in riscos_selecionados_categoria:
+                            dano = df_pgr[df_pgr['risco'] == risco]['possiveis_danos'].iloc[0]
+                            st.write(f"**{risco}:** {dano}")
+                else:
+                    st.info(f"Nenhum risco encontrado para a categoria {nome_categoria}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Resumo dos riscos selecionados
+        if riscos_selecionados:
+            st.markdown('<div class="success-box">', unsafe_allow_html=True)
+            st.write(f"**Total de riscos selecionados:** {len(riscos_selecionados)}")
+            st.write("**Riscos:** " + ", ".join(riscos_selecionados))
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # --- Adicionar Risco Manual ---
+        st.markdown('<div class="section-header"><h3>➕ Adicionar Risco Manual</h3></div>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.subheader("Riscos da Base de Dados")
-            riscos_disponiveis = df_pgr['risco'].unique().tolist()
-            riscos_selecionados = st.multiselect("Selecionar Riscos", riscos_disponiveis)
-        
-        with col2:
-            st.subheader("Adicionar Risco Manual")
             categoria_manual = st.selectbox("Categoria do Risco", ["", "Físicos", "Químicos", "Biológicos", "Ergonômicos", "Acidentes"])
             perigo_manual = st.text_input("Descrição do Risco")
+        with col2:
             danos_manuais = st.text_area("Possíveis Danos", placeholder="Descreva os possíveis danos...")
         
         # --- Configuração de EPIs ---
