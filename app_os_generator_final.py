@@ -23,7 +23,7 @@ if 'descricoes' not in st.session_state:
 if 'documentos_gerados' not in st.session_state:
     st.session_state.documentos_gerados = []
 
-# --- Modelo de OS Incorporado ---
+# --- Modelo de OS Incorporado (Fallback) ---
 MODELO_OS_TEMPLATE = """ORDEM DE SERVIÇO SOBRE SEGURANÇA E SAÚDE NO TRABALHO
 NR01 item 1.4.1 c) item 1.4.4.1 b
 N° da OS: Data de Elaboração: Última Revisão: Versão:
@@ -86,8 +86,8 @@ SESMT Chefia Imediata Funcionário"""
 
 # --- Unidades de Medida ---
 UNIDADES_MEDIDA = [
-    "dB Linear", "dB(C)", "dB(A)", "m/s²", "m/s1,75", "ppm", "mg/m³", "g/m³", 
-    "f/cm³", "°C", "m/s", "%", "lx", "ufc/m³", "W/m²", "A/m", "mT", "µT", 
+    "dB Linear", "dB(C)", "dB(A)", "m/s²", "m/s1,75", "ppm", "mg/m³", "g/m³",
+    "f/cm³", "°C", "m/s", "%", "lx", "ufc/m³", "W/m²", "A/m", "mT", "µT",
     "mA", "kV/m", "V/m", "J/m²", "mJ/cm²", "mSv", "mppdc", "UR(%)", "Lux"
 ]
 
@@ -151,14 +151,10 @@ def carregar_planilha(arquivo):
 def criar_modelo_os_temporario():
     """Cria um arquivo temporário com o modelo de OS incorporado."""
     doc = Document()
-    
-    # Adiciona o conteúdo do modelo
     paragrafos = MODELO_OS_TEMPLATE.split('\n')
     for paragrafo in paragrafos:
         if paragrafo.strip():
             doc.add_paragraph(paragrafo)
-    
-    # Salva em arquivo temporário
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
     doc.save(temp_file.name)
     return temp_file.name
@@ -167,9 +163,12 @@ def replace_text_in_paragraph(paragraph, contexto):
     """Substitui placeholders em um único parágrafo."""
     for key, value in contexto.items():
         if key in paragraph.text:
-            for run in paragraph.runs:
-                if key in run.text:
-                    run.text = run.text.replace(key, str(value))
+            inline = paragraph.runs
+            # Substituição preservando a formatação
+            for i in range(len(inline)):
+                if key in inline[i].text:
+                    text = inline[i].text.replace(key, str(value))
+                    inline[i].text = text
 
 def substituir_placeholders(doc, contexto):
     """Substitui os placeholders em todo o documento (parágrafos e tabelas)."""
@@ -181,26 +180,36 @@ def substituir_placeholders(doc, contexto):
                 for p in cell.paragraphs:
                     replace_text_in_paragraph(p, contexto)
 
-def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, logo_path=None):
+def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, logo_path=None, modelo_doc_carregado=None):
     """Gera uma única Ordem de Serviço para um funcionário."""
-    # Usa o modelo incorporado
-    modelo_path = criar_modelo_os_temporario()
-    doc = Document(modelo_path)
+    doc = None
+    modelo_path_temporario = None
+
+    if modelo_doc_carregado:
+        # Usa o modelo carregado pelo usuário
+        doc = Document(modelo_doc_carregado)
+    else:
+        # Usa o modelo interno (fallback)
+        modelo_path_temporario = criar_modelo_os_temporario()
+        doc = Document(modelo_path_temporario)
 
     if logo_path:
         try:
+            # Tenta inserir na primeira tabela (cabeçalho)
             header_table = doc.tables[0]
             cell = header_table.cell(0, 0)
+            # Limpa a célula antes de adicionar a imagem
             cell.text = "" 
             p = cell.paragraphs[0]
             run = p.add_run()
             run.add_picture(logo_path, width=Inches(2.0))
-        except IndexError:
-            st.warning("Aviso: Não foi encontrada uma tabela de cabeçalho no modelo para inserir a logo.")
+        except (IndexError, KeyError):
+            st.warning("Aviso: Não foi encontrada uma tabela no cabeçalho do modelo para inserir a logo. A imagem será inserida no topo do documento.")
+            # Insere no topo se não houver tabela
             p = doc.paragraphs[0]
             run = p.insert_paragraph_before().add_run()
             run.add_picture(logo_path, width=Inches(2.0))
-
+            
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     
     riscos_por_categoria = {"fisico": [], "quimico": [], "biologico": [], "ergonomico": [], "acidente": []}
@@ -236,8 +245,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
 
     if medicoes_manuais:
         medicoes_lista.extend([med.strip() for med in medicoes_manuais.split('\n') if med.strip()])
-
-    # Correção: Tratamento para data de admissão ausente
+        
     data_admissao = "não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try:
@@ -245,15 +253,12 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         except Exception:
             data_admissao = str(funcionario['data_de_admissao'])
 
-    # Correção: Remover colchetes do nome dos funcionários
     nome_funcionario = str(funcionario.get("nome_do_funcionario", "N/A")).replace("[", "").replace("]", "")
 
-    # Nova funcionalidade: Pegar descrição de atividades da planilha
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
 
-    # Correção: Tratamento para riscos não selecionados
     def tratar_risco_vazio(lista_riscos):
         if not lista_riscos or all(not r.strip() for r in lista_riscos):
             return "Não identificado no momento da avaliação"
@@ -288,8 +293,8 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     
     substituir_placeholders(doc, contexto)
     
-    # Remove o arquivo temporário
-    os.unlink(modelo_path)
+    if modelo_path_temporario:
+        os.unlink(modelo_path_temporario)
     
     return doc
 
@@ -342,7 +347,7 @@ def obter_dados_pgr():
 
 # --- Interface do Streamlit ---
 
-# Estilo CSS para layout mais profissional e correção de visibilidade
+# (O CSS continua o mesmo, sem alterações)
 st.markdown("""
 <style>
     .main-header {
@@ -385,54 +390,18 @@ st.markdown("""
     .stSelectbox > div > div {
         background-color: #f8fafc;
     }
-    /* Correção para visibilidade do texto nas tabelas */
-    .stDataFrame {
+    .stDataFrame, .stDataFrame table, .stDataFrame th, .stDataFrame td {
+        background-color: white !important;
+        color: #1f2937 !important;
+    }
+    .stTextInput > div > div > input, .stTextArea > div > div > textarea, 
+    .stSelectbox > div > div > div, .stMultiSelect > div > div > div {
+        color: #1f2937 !important;
         background-color: white !important;
     }
-    .stDataFrame table {
-        background-color: white !important;
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-    }
-    .stDataFrame th {
-        background-color: #f9fafb !important;
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-        font-weight: 600;
-    }
-    .stDataFrame td {
-        background-color: white !important;
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-    }
-    /* Correção para texto em elementos de entrada */
-    .stTextInput > div > div > input {
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-        background-color: white !important;
-    }
-    .stTextArea > div > div > textarea {
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-        background-color: white !important;
-    }
-    .stSelectbox > div > div > div {
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-        background-color: white !important;
-    }
-    .stMultiSelect > div > div > div {
-        color: #1f2937 !important; /* Força a cor do texto para cinza escuro */
-        background-color: white !important;
-    }
-    /* Correção para tabelas vazias */
-    .element-container div[data-testid="stDataFrame"] {
-        background-color: white !important;
-    }
-    /* Força cor do texto em todos os elementos */
     div[data-testid="stDataFrame"] * {
         color: #1f2937 !important;
     }
-    /* Correção específica para células vazias */
-    .stDataFrame tbody tr td {
-        background-color: white !important;
-        color: #1f2937 !important;
-    }
-    /* Estilo para grupos de riscos */
     .risk-group {
         background: #f8fafc;
         padding: 1rem;
@@ -458,20 +427,32 @@ st.markdown("""
 # --- Sidebar para upload de arquivos ---
 st.sidebar.markdown("### 📁 Carregar Arquivos")
 arquivo_funcionarios = st.sidebar.file_uploader(
-    "Planilha de Funcionários", 
+    "1. Planilha de Funcionários", 
     type="xlsx", 
     help="Ficheiro .xlsx obrigatório com os dados dos funcionários."
 )
 
+# NOVO: Uploader para o modelo de OS
+arquivo_modelo_os = st.sidebar.file_uploader(
+    "2. Modelo de OS (Opcional)",
+    type="docx",
+    help="Carregue seu arquivo .docx. Se nenhum for enviado, o sistema usará um modelo padrão."
+)
+
 arquivo_logo = st.sidebar.file_uploader(
-    "Logo da Empresa (Opcional)", 
+    "3. Logo da Empresa (Opcional)", 
     type=["png", "jpg", "jpeg"],
     help="Imagem da logo que será inserida no cabeçalho da OS"
 )
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ℹ️ Informações")
-st.sidebar.info("O modelo de OS já está incorporado no sistema. Não é necessário fazer upload do modelo.")
+# MUDANÇA: Texto informativo atualizado
+st.sidebar.info(
+    "Você pode carregar seu próprio modelo de Ordem de Serviço (.docx). "
+    "Se nenhum modelo for carregado, um padrão interno será utilizado."
+)
+
 
 # --- Carregamento e Processamento dos Dados ---
 df_pgr = obter_dados_pgr()
@@ -485,215 +466,139 @@ if arquivo_funcionarios:
         
         # Filtros para seleção automática
         col1, col2 = st.columns(2)
-        
         with col1:
             setores_disponiveis = df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else []
-            setor_selecionado = st.selectbox("Selecionar Setor", ["Todos"] + setores_disponiveis)
-        
+            setor_selecionado = st.selectbox("Filtrar por Setor", ["Todos"] + setores_disponiveis)
         with col2:
             if setor_selecionado != "Todos":
                 df_filtrado = df_funcionarios[df_funcionarios['setor'] == setor_selecionado]
             else:
                 df_filtrado = df_funcionarios
-                
             funcoes_disponiveis = df_filtrado['funcao'].dropna().unique().tolist() if 'funcao' in df_filtrado.columns else []
-            funcao_selecionada = st.selectbox("Selecionar Função/Cargo", ["Todos"] + funcoes_disponiveis)
-        
-        # Seleção automática de funcionários baseada nos filtros
+            funcao_selecionada = st.selectbox("Filtrar por Função/Cargo", ["Todos"] + funcoes_disponiveis)
+
+        # Seleção de funcionários com base nos filtros
+        df_funcionarios_filtrados = df_funcionarios
         if setor_selecionado != "Todos":
-            df_funcionarios_filtrados = df_funcionarios[df_funcionarios['setor'] == setor_selecionado]
-        else:
-            df_funcionarios_filtrados = df_funcionarios
-            
+            df_funcionarios_filtrados = df_funcionarios_filtrados[df_funcionarios_filtrados['setor'] == setor_selecionado]
         if funcao_selecionada != "Todos":
             df_funcionarios_filtrados = df_funcionarios_filtrados[df_funcionarios_filtrados['funcao'] == funcao_selecionada]
         
-        st.markdown(f'<div class="info-box">✅ <strong>{len(df_funcionarios_filtrados)} funcionários</strong> selecionados automaticamente</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="info-box">✅ <strong>{len(df_funcionarios_filtrados)} funcionários</strong> correspondem aos filtros selecionados.</div>', unsafe_allow_html=True)
         
-        # Mostrar TODOS os funcionários selecionados
         if len(df_funcionarios_filtrados) > 0:
-            colunas_para_mostrar = ['nome_do_funcionario', 'setor', 'funcao']
-            if 'descricao_de_atividades' in df_funcionarios_filtrados.columns:
-                colunas_para_mostrar.append('descricao_de_atividades')
-            
+            colunas_para_mostrar = [col for col in ['nome_do_funcionario', 'setor', 'funcao', 'descricao_de_atividades'] if col in df_funcionarios_filtrados.columns]
             st.dataframe(df_funcionarios_filtrados[colunas_para_mostrar], use_container_width=True)
         
         # --- Configuração de Riscos por Grupo ---
         st.markdown('<div class="section-header"><h3>⚠️ Configuração de Riscos por Categoria</h3></div>', unsafe_allow_html=True)
-        
-        # Organizar riscos por categoria
-        categorias = {
-            'fisico': '🔥 Riscos Físicos',
-            'quimico': '⚗️ Riscos Químicos', 
-            'biologico': '🦠 Riscos Biológicos',
-            'ergonomico': '🏃 Riscos Ergonômicos',
-            'acidente': '⚠️ Riscos de Acidentes'
-        }
-        
+        categorias = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
         riscos_selecionados = []
         
-        # Criar abas para cada categoria
         tabs = st.tabs(list(categorias.values()))
-        
         for i, (categoria, nome_categoria) in enumerate(categorias.items()):
             with tabs[i]:
-                st.markdown(f'<div class="risk-group">', unsafe_allow_html=True)
-                
-                # Filtrar riscos da categoria
                 riscos_categoria = df_pgr[df_pgr['categoria'] == categoria]['risco'].tolist()
-                
                 if riscos_categoria:
-                    # Checkbox para selecionar todos da categoria
-                    selecionar_todos = st.checkbox(f"Selecionar todos os {nome_categoria.lower()}", key=f"todos_{categoria}")
-                    
-                    if selecionar_todos:
-                        riscos_selecionados_categoria = st.multiselect(
-                            f"Riscos selecionados:",
-                            riscos_categoria,
-                            default=riscos_categoria,
-                            key=f"riscos_{categoria}"
-                        )
-                    else:
-                        riscos_selecionados_categoria = st.multiselect(
-                            f"Selecionar riscos específicos:",
-                            riscos_categoria,
-                            key=f"riscos_{categoria}"
-                        )
-                    
-                    riscos_selecionados.extend(riscos_selecionados_categoria)
-                    
-                    # Mostrar possíveis danos dos riscos selecionados
-                    if riscos_selecionados_categoria:
-                        st.subheader("Possíveis Danos:")
-                        for risco in riscos_selecionados_categoria:
-                            dano = df_pgr[df_pgr['risco'] == risco]['possiveis_danos'].iloc[0]
-                            st.write(f"**{risco}:** {dano}")
+                    selecionados_categoria = st.multiselect(f"Selecione os riscos para a categoria {nome_categoria}:", options=riscos_categoria, key=f"riscos_{categoria}")
+                    riscos_selecionados.extend(selecionados_categoria)
+                    if selecionados_categoria:
+                        with st.expander("Ver possíveis danos dos riscos selecionados"):
+                            for risco in selecionados_categoria:
+                                dano = df_pgr[df_pgr['risco'] == risco]['possiveis_danos'].iloc[0]
+                                st.write(f"**{risco}:** {dano}")
                 else:
                     st.info(f"Nenhum risco encontrado para a categoria {nome_categoria}")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Resumo dos riscos selecionados
+
         if riscos_selecionados:
-            st.markdown('<div class="success-box">', unsafe_allow_html=True)
-            st.write(f"**Total de riscos selecionados:** {len(riscos_selecionados)}")
-            st.write("**Riscos:** " + ", ".join(riscos_selecionados))
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="success-box">**Total de {len(riscos_selecionados)} riscos selecionados:** {", ".join(riscos_selecionados)}</div>', unsafe_allow_html=True)
         
         # --- Adicionar Risco Manual ---
-        st.markdown('<div class="section-header"><h3>➕ Adicionar Risco Manual</h3></div>', unsafe_allow_html=True)
+        with st.expander("➕ Adicionar Risco Manualmente (Opcional)"):
+            col1, col2 = st.columns(2)
+            with col1:
+                categoria_manual = st.selectbox("Categoria do Risco", ["", "Físicos", "Químicos", "Biológicos", "Ergonômicos", "Acidentes"], key="cat_manual")
+                perigo_manual = st.text_input("Descrição do Risco", key="perigo_manual")
+            with col2:
+                danos_manuais = st.text_area("Possíveis Danos", placeholder="Descreva os possíveis danos...", key="danos_manuais")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            categoria_manual = st.selectbox("Categoria do Risco", ["", "Físicos", "Químicos", "Biológicos", "Ergonômicos", "Acidentes"])
-            perigo_manual = st.text_input("Descrição do Risco")
-        with col2:
-            danos_manuais = st.text_area("Possíveis Danos", placeholder="Descreva os possíveis danos...")
-        
-        # --- Configuração de EPIs ---
-        st.markdown('<div class="section-header"><h3>🦺 Equipamentos de Proteção Individual (EPIs)</h3></div>', unsafe_allow_html=True)
-        epis_manuais = st.text_area("EPIs Recomendados", placeholder="Digite os EPIs separados por vírgula...")
-        
-        # --- Configuração de Medições ---
-        st.markdown('<div class="section-header"><h3>📊 Medições e Avaliações</h3></div>', unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            medicao_valor = st.text_input("Valor da Medição")
-        with col2:
-            unidade_medicao = st.selectbox("Unidade de Medida", UNIDADES_MEDIDA)
-        
-        medicao_descricao = st.text_area("Descrição da Medição", placeholder="Descreva o contexto da medição...")
-        
-        medicoes_manuais = ""
-        if medicao_valor and unidade_medicao:
-            medicoes_manuais = f"{medicao_descricao}: {medicao_valor} {unidade_medicao}"
-        
+        # --- Configuração de EPIs e Medições ---
+        with st.expander("🦺 Configurar EPIs e Medições (Opcional)"):
+            epis_manuais = st.text_area("EPIs Recomendados (separados por vírgula)", placeholder="Ex: Luva de raspa, Protetor auricular, Capacete...")
+            medicoes_manuais = st.text_area("Medições e Avaliações (uma por linha)", placeholder="Ex: Ruído: 85 dB(A) para 8h")
+
         # --- Geração das OSs ---
         st.markdown('<div class="section-header"><h3>🚀 Gerar Ordens de Serviço</h3></div>', unsafe_allow_html=True)
         
         if st.button("🔄 Gerar OSs para Funcionários Selecionados", type="primary"):
             if len(df_funcionarios_filtrados) == 0:
-                st.error("Nenhum funcionário selecionado!")
+                st.error("Nenhum funcionário selecionado! Ajuste os filtros.")
             else:
-                with st.spinner("Gerando Ordens de Serviço..."):
+                with st.spinner("Gerando Ordens de Serviço... Aguarde."):
                     documentos_gerados = []
                     logo_path = None
                     
                     if arquivo_logo:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{arquivo_logo.name.split('.')[-1]}") as temp_logo:
-                            temp_logo.write(arquivo_logo.read())
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(arquivo_logo.name)[1]) as temp_logo:
+                            temp_logo.write(arquivo_logo.getbuffer())
                             logo_path = temp_logo.name
                     
-                    progress_bar = st.progress(0)
+                    progress_bar = st.progress(0, text="Iniciando geração...")
                     total_funcionarios = len(df_funcionarios_filtrados)
                     
                     for i, (_, funcionario) in enumerate(df_funcionarios_filtrados.iterrows()):
+                        nome_func = funcionario.get('nome_do_funcionario', f'Funcionário_{i+1}')
+                        progress_bar.progress((i + 1) / total_funcionarios, text=f"Gerando OS para: {nome_func}")
                         try:
+                            # MUDANÇA: Passa o arquivo de modelo carregado para a função
                             doc = gerar_os(
                                 funcionario, df_pgr, 
                                 riscos_selecionados, epis_manuais, medicoes_manuais,
-                                perigo_manual, danos_manuais, categoria_manual, logo_path
+                                perigo_manual, danos_manuais, categoria_manual, logo_path,
+                                modelo_doc_carregado=arquivo_modelo_os
                             )
                             
-                            # Salva o documento em memória
                             doc_io = BytesIO()
                             doc.save(doc_io)
                             doc_io.seek(0)
                             
-                            nome_limpo = str(funcionario.get("nome_do_funcionario", f"Funcionario_{i+1}")).replace("[", "").replace("]", "")
+                            nome_limpo = str(nome_func).replace("[", "").replace("]", "")
                             documentos_gerados.append((f"OS_{nome_limpo.replace(' ', '_')}.docx", doc_io.getvalue()))
                             
-                            progress_bar.progress((i + 1) / total_funcionarios)
-                            
                         except Exception as e:
-                            st.error(f"Erro ao gerar OS para {funcionario.get('nome_do_funcionario', 'funcionário')}: {e}")
+                            st.error(f"Erro ao gerar OS para {nome_func}: {e}")
                     
                     if logo_path:
                         os.unlink(logo_path)
                     
                     if documentos_gerados:
-                        # Criar ZIP com todos os documentos
                         zip_buffer = BytesIO()
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                             for nome_arquivo, conteudo in documentos_gerados:
                                 zip_file.writestr(nome_arquivo, conteudo)
-                        
                         zip_buffer.seek(0)
                         
                         st.markdown(f'<div class="success-box">✅ <strong>{len(documentos_gerados)} Ordens de Serviço</strong> geradas com sucesso!</div>', unsafe_allow_html=True)
                         
-                        # Download automático
                         st.download_button(
-                            label="📥 Baixar Todas as OSs (ZIP)",
+                            label="📥 Baixar Todas as OSs (Arquivo ZIP)",
                             data=zip_buffer.getvalue(),
                             file_name=f"Ordens_de_Servico_{time.strftime('%Y%m%d_%H%M%S')}.zip",
                             mime="application/zip",
                             key="download_zip"
                         )
-                        
-                        # Trigger download automático via JavaScript
-                        st.markdown("""
-                        <script>
-                        setTimeout(function(){
-                            document.querySelector('[data-testid="stDownloadButton"] button').click();
-                        }, 1000);
-                        </script>
-                        """, unsafe_allow_html=True)
 else:
-    st.markdown('<div class="info-box">📋 Por favor, carregue a planilha de funcionários para começar.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-box">📋 Por favor, carregue a planilha de funcionários na barra lateral para começar.</div>', unsafe_allow_html=True)
     
-    # Exemplo de estrutura da planilha
-    st.markdown('<div class="section-header"><h3>📋 Estrutura da Planilha de Funcionários</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header"><h3>📋 Exemplo de Estrutura da Planilha de Funcionários</h3></div>', unsafe_allow_html=True)
     exemplo_df = pd.DataFrame({
-        'Nome': ['João Silva', 'Maria Santos'],
-        'Setor': ['Produção', 'Administrativo'],
-        'Função': ['Operador', 'Assistente'],
-        'Data de Admissão': ['01/01/2020', '15/03/2021'],
-        'Empresa': ['Empresa XYZ', 'Empresa XYZ'],
-        'Unidade': ['Matriz', 'Filial'],
-        'Descrição de Atividades': ['Operar máquinas de produção', 'Atividades administrativas gerais']
+        'Nome Completo': ['João da Silva', 'Maria Oliveira'],
+        'Setor': ['Produção', 'Logística'],
+        'Função': ['Operador de Máquinas', 'Auxiliar de Almoxarifado'],
+        'Data de Admissão': ['2020-01-10', '2021-03-15'],
+        'Empresa': ['Indústria ABC', 'Indústria ABC'],
+        'Unidade': ['Matriz', 'Matriz'],
+        'Descrição de Atividades': ['Operar a máquina de corte XYZ e realizar a limpeza do equipamento.', 'Receber, conferir e organizar materiais no estoque.']
     })
     st.dataframe(exemplo_df, use_container_width=True)
-    st.info("A planilha deve conter pelo menos as colunas: Nome, Setor, Função. A coluna 'Descrição de Atividades' é opcional mas recomendada.")
-
+    st.info("A planilha deve conter colunas com os nomes dos funcionários, seus setores e funções. Outras colunas como 'Data de Admissão' e 'Descrição de Atividades' são recomendadas para um preenchimento mais completo.")
