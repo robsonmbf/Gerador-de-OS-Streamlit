@@ -23,14 +23,12 @@ def normalizar_texto(texto):
     """Função auxiliar para limpar e padronizar strings para comparação."""
     if not isinstance(texto, str):
         return ""
-    # Remove acentos, converte para minúsculas e remove caracteres não alfanuméricos
     texto = texto.lower().strip()
     texto = re.sub(r'[\s\W_]+', '', texto) 
     return texto
 
 def mapear_e_renomear_colunas_funcionarios(df):
     """Mapeia e renomeia colunas da planilha de funcionários de forma robusta."""
-    # AJUSTE: Adicionado "setordetrabalho" e outras variações baseadas no modelo do usuário.
     mapeamento = {
         'nome_do_funcionario': ['nomedofuncionario', 'nome', 'funcionario', 'funcionário', 'colaborador', 'nomecompleto'],
         'funcao': ['funcao', 'função', 'cargo'],
@@ -64,23 +62,42 @@ def carregar_planilha(arquivo):
         st.error(f"Erro ao ler o ficheiro Excel: {e}")
         return None
 
-def replace_text_in_paragraph(paragraph, contexto):
-    """Substitui placeholders em um único parágrafo."""
-    for key, value in contexto.items():
-        if key in paragraph.text:
-            for run in paragraph.runs:
-                if key in run.text:
-                    run.text = run.text.replace(key, str(value))
-
+# --- NOVA FUNÇÃO DE SUBSTITUIÇÃO ROBUSTA ---
 def substituir_placeholders(doc, contexto):
-    """Substitui os placeholders em todo o documento."""
+    """
+    Substitui os placeholders em todo o documento (parágrafos e tabelas).
+    Esta versão é robusta e lida com placeholders fragmentados em múltiplos 'runs'.
+    """
+    # Substituição nos parágrafos
     for p in doc.paragraphs:
-        replace_text_in_paragraph(p, contexto)
+        # Pega o texto completo do parágrafo para verificar a presença da chave
+        full_text = "".join(run.text for run in p.runs)
+        for key, value in contexto.items():
+            if key in full_text:
+                # Se a chave existe, faz a substituição no texto completo
+                full_text = full_text.replace(key, str(value))
+        
+        # Limpa o parágrafo original e adiciona o novo texto em um único 'run'
+        # Isso garante a substituição, mas pode remover formatações internas do parágrafo.
+        # Para placeholders, isso geralmente não é um problema.
+        for i in range(len(p.runs)):
+            p.runs[i].text = ''
+        p.runs[0].text = full_text
+
+    # Substituição nas tabelas
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    replace_text_in_paragraph(p, contexto)
+                    full_text = "".join(run.text for run in p.runs)
+                    for key, value in contexto.items():
+                        if key in full_text:
+                            full_text = full_text.replace(key, str(value))
+                    
+                    for i in range(len(p.runs)):
+                        p.runs[i].text = ''
+                    if p.runs:
+                        p.runs[0].text = full_text
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, modelo_doc_carregado, logo_path=None):
     """Gera uma única Ordem de Serviço."""
@@ -153,7 +170,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[MEDIÇÕES]": medicoes_manuais or "Não aplicável",
     }
     
-    substituir_placeholders(doc, contexto)
+    substituir_placeholders(doc, contexto) # Chamando a nova função robusta
     return doc
 
 def obter_dados_pgr():
@@ -161,6 +178,8 @@ def obter_dados_pgr():
     return pd.DataFrame([{'categoria': 'fisico', 'risco': 'Ruído', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'}, {'categoria': 'fisico', 'risco': 'Vibração', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios.'}, {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'}, {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'}, {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'}, {'categoria': 'fisico', 'risco': 'Radiações Não Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'}, {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'}, {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites.'}, {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses, irritação respiratória, alergias.'}, {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias, intoxicações.'}, {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'}, {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'}, {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'}, {'categoria': 'quimico', 'risco': 'Substâncias Químicas (líquidos e sólidos)', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'}, {'categoria': 'quimico', 'risco': 'Agrotóxicos', 'possiveis_danos': 'Intoxicações, dermatites, câncer.'}, {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções, doenças infecciosas.'}, {'categoria': 'biologico', 'risco': 'Fungos', 'possiveis_danos': 'Micoses, alergias, infecções respiratórias.'}, {'categoria': 'biologico', 'risco': 'Vírus', 'possiveis_danos': 'Doenças virais, infecções.'}, {'categoria': 'biologico', 'risco': 'Parasitas', 'possiveis_danos': 'Doenças parasitárias, infecções.'}, {'categoria': 'biologico', 'risco': 'Protozoários', 'possiveis_danos': 'Doenças parasitárias.'}, {'categoria': 'biologico', 'risco': 'Bacilos', 'possiveis_danos': 'Infecções diversas, como tuberculose.'}, {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'}, {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'}, {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'}, {'categoria': 'ergonomico', 'risco': 'Jornada de Trabalho Prolongada', 'possiveis_danos': 'Fadiga, estresse, acidentes de trabalho.'}, {'categoria': 'ergonomico', 'risco': 'Monotonia e Ritmo Excessivo', 'possiveis_danos': 'Estresse, fadiga mental, desmotivação.'}, {'categoria': 'ergonomico', 'risco': 'Controle Rígido de Produtividade', 'possiveis_danos': 'Estresse, ansiedade, burnout.'}, {'categoria': 'ergonomico', 'risco': 'Iluminação Inadequada', 'possiveis_danos': 'Fadiga visual, dores de cabeça.'}, {'categoria': 'ergonomico', 'risco': 'Mobiliário Inadequado', 'possiveis_danos': 'Dores musculares, lesões na coluna.'}, {'categoria': 'acidente', 'risco': 'Arranjo Físico Inadequado', 'possiveis_danos': 'Quedas, colisões, esmagamentos.'}, {'categoria': 'acidente', 'risco': 'Máquinas e Equipamentos sem Proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'}, {'categoria': 'acidente', 'risco': 'Ferramentas Inadequadas ou Defeituosas', 'possiveis_danos': 'Cortes, perfurações, fraturas.'}, {'categoria': 'acidente', 'risco': 'Eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular.'}, {'categoria': 'acidente', 'risco': 'Incêndio e Explosão', 'possiveis_danos': 'Queimaduras, asfixia, lesões por impacto.'}, {'categoria': 'acidente', 'risco': 'Animais Peçonhentos', 'possiveis_danos': 'Picadas, mordidas, reações alérgicas, envenenamento.'}, {'categoria': 'acidente', 'risco': 'Armazenamento Inadequado', 'possiveis_danos': 'Quedas de materiais, esmagamentos, soterramentos.'}, {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'}, {'categoria': 'acidente', 'risco': 'Espaços Confinados', 'possiveis_danos': 'Asfixia, intoxicações, explosões.'}, {'categoria': 'acidente', 'risco': 'Condução de Veículos', 'possiveis_danos': 'Acidentes de trânsito, lesões diversas.'}, {'categoria': 'acidente', 'risco': 'Projeção de Partículas', 'possiveis_danos': 'Lesões oculares, cortes na pele.'}])
 
 # --- Interface do Streamlit ---
+# O restante da interface (UI) continua o mesmo.
+# Apenas a lógica interna de substituição de texto foi alterada.
 st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Geração automática de OS a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
 st.sidebar.markdown("### 📁 Arquivos Necessários")
 arquivo_funcionarios = st.sidebar.file_uploader("1. Planilha de Funcionários (.xlsx)", type="xlsx")
@@ -176,8 +195,6 @@ else:
     df_pgr = obter_dados_pgr()
 
     st.markdown('### 👥 Seleção de Funcionários')
-    
-    # Filtros de Setor e Função
     setores = ["Todos"] + (df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else [])
     setor_sel = st.selectbox("Filtrar por Setor", setores)
     df_filtrado_setor = df_funcionarios[df_funcionarios['setor'] == setor_sel] if setor_sel != "Todos" else df_funcionarios
@@ -188,7 +205,6 @@ else:
     
     st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados.")
 
-    # Lógica de exibição segura do DataFrame
     colunas_desejadas = ['nome_do_funcionario', 'setor', 'funcao']
     colunas_existentes = [col for col in colunas_desejadas if col in df_final_filtrado.columns]
     colunas_faltantes = [col for col in colunas_desejadas if col not in df_final_filtrado.columns]
@@ -243,4 +259,4 @@ else:
                         for nome, conteudo in documentos_gerados: zf.writestr(nome, conteudo)
                     
                     st.success(f"🎉 {len(documentos_gerados)} Ordens de Serviço geradas!")
-                    st.download_button("📥 Baixar Todas as OSs (.zip)", data=zip_buffer, file_name=f"Ordens_de_Servico_{time.strftime('%Y%m%d')}.zip", mime="application/zip")
+                    st.download_button("📥 Baixar Todas as OSs (.zip)", data=zip_buffer.getvalue(), file_name=f"Ordens_de_Servico_{time.strftime('%Y%m%d')}.zip", mime="application/zip")
