@@ -62,42 +62,51 @@ def carregar_planilha(arquivo):
         st.error(f"Erro ao ler o ficheiro Excel: {e}")
         return None
 
-# --- NOVA FUNÇÃO DE SUBSTITUIÇÃO ROBUSTA ---
+# --- FUNÇÃO DE SUBSTITUIÇÃO CORRIGIDA ---
 def substituir_placeholders(doc, contexto):
     """
-    Substitui os placeholders em todo o documento (parágrafos e tabelas).
-    Esta versão é robusta e lida com placeholders fragmentados em múltiplos 'runs'.
+    Substitui os placeholders em todo o documento de forma segura,
+    lidando com placeholders fragmentados e parágrafos vazios.
     """
-    # Substituição nos parágrafos
+    # Processa parágrafos no corpo do documento
     for p in doc.paragraphs:
         # Pega o texto completo do parágrafo para verificar a presença da chave
         full_text = "".join(run.text for run in p.runs)
+        # Se não houver texto, pula para o próximo parágrafo
+        if not full_text.strip():
+            continue
+            
+        original_text = full_text
         for key, value in contexto.items():
             if key in full_text:
-                # Se a chave existe, faz a substituição no texto completo
                 full_text = full_text.replace(key, str(value))
         
-        # Limpa o parágrafo original e adiciona o novo texto em um único 'run'
-        # Isso garante a substituição, mas pode remover formatações internas do parágrafo.
-        # Para placeholders, isso geralmente não é um problema.
-        for i in range(len(p.runs)):
-            p.runs[i].text = ''
-        p.runs[0].text = full_text
+        # Apenas modifica o parágrafo se o texto foi alterado
+        if original_text != full_text:
+            # Limpa todos os 'runs' existentes no parágrafo
+            for run in p.runs:
+                run.text = ''
+            # Adiciona o novo texto em um novo 'run'
+            p.add_run(full_text)
 
-    # Substituição nas tabelas
+    # Processa parágrafos dentro de tabelas
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
                     full_text = "".join(run.text for run in p.runs)
+                    if not full_text.strip():
+                        continue
+                        
+                    original_text = full_text
                     for key, value in contexto.items():
                         if key in full_text:
                             full_text = full_text.replace(key, str(value))
                     
-                    for i in range(len(p.runs)):
-                        p.runs[i].text = ''
-                    if p.runs:
-                        p.runs[0].text = full_text
+                    if original_text != full_text:
+                        for run in p.runs:
+                            run.text = ''
+                        p.add_run(full_text)
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, modelo_doc_carregado, logo_path=None):
     """Gera uma única Ordem de Serviço."""
@@ -105,7 +114,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
 
     if logo_path:
         try:
-            doc.tables[0].cell(0, 0).paragraphs[0].add_run().add_picture(logo_path, width=Inches(1.5))
+            # Limpa o parágrafo antes de adicionar a imagem para evitar sobreposição
+            p = doc.tables[0].cell(0, 0).paragraphs[0]
+            for run in p.runs:
+                run.text = ''
+            p.add_run().add_picture(logo_path, width=Inches(1.5))
         except Exception:
             st.warning("Aviso: Não foi possível inserir a logo. Verifique se o modelo .docx possui uma tabela no cabeçalho.")
             
@@ -170,7 +183,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[MEDIÇÕES]": medicoes_manuais or "Não aplicável",
     }
     
-    substituir_placeholders(doc, contexto) # Chamando a nova função robusta
+    substituir_placeholders(doc, contexto)
     return doc
 
 def obter_dados_pgr():
@@ -178,8 +191,6 @@ def obter_dados_pgr():
     return pd.DataFrame([{'categoria': 'fisico', 'risco': 'Ruído', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'}, {'categoria': 'fisico', 'risco': 'Vibração', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios.'}, {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'}, {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'}, {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'}, {'categoria': 'fisico', 'risco': 'Radiações Não Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'}, {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'}, {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites.'}, {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses, irritação respiratória, alergias.'}, {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias, intoxicações.'}, {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'}, {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'}, {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'}, {'categoria': 'quimico', 'risco': 'Substâncias Químicas (líquidos e sólidos)', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'}, {'categoria': 'quimico', 'risco': 'Agrotóxicos', 'possiveis_danos': 'Intoxicações, dermatites, câncer.'}, {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções, doenças infecciosas.'}, {'categoria': 'biologico', 'risco': 'Fungos', 'possiveis_danos': 'Micoses, alergias, infecções respiratórias.'}, {'categoria': 'biologico', 'risco': 'Vírus', 'possiveis_danos': 'Doenças virais, infecções.'}, {'categoria': 'biologico', 'risco': 'Parasitas', 'possiveis_danos': 'Doenças parasitárias, infecções.'}, {'categoria': 'biologico', 'risco': 'Protozoários', 'possiveis_danos': 'Doenças parasitárias.'}, {'categoria': 'biologico', 'risco': 'Bacilos', 'possiveis_danos': 'Infecções diversas, como tuberculose.'}, {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'}, {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'}, {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'}, {'categoria': 'ergonomico', 'risco': 'Jornada de Trabalho Prolongada', 'possiveis_danos': 'Fadiga, estresse, acidentes de trabalho.'}, {'categoria': 'ergonomico', 'risco': 'Monotonia e Ritmo Excessivo', 'possiveis_danos': 'Estresse, fadiga mental, desmotivação.'}, {'categoria': 'ergonomico', 'risco': 'Controle Rígido de Produtividade', 'possiveis_danos': 'Estresse, ansiedade, burnout.'}, {'categoria': 'ergonomico', 'risco': 'Iluminação Inadequada', 'possiveis_danos': 'Fadiga visual, dores de cabeça.'}, {'categoria': 'ergonomico', 'risco': 'Mobiliário Inadequado', 'possiveis_danos': 'Dores musculares, lesões na coluna.'}, {'categoria': 'acidente', 'risco': 'Arranjo Físico Inadequado', 'possiveis_danos': 'Quedas, colisões, esmagamentos.'}, {'categoria': 'acidente', 'risco': 'Máquinas e Equipamentos sem Proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'}, {'categoria': 'acidente', 'risco': 'Ferramentas Inadequadas ou Defeituosas', 'possiveis_danos': 'Cortes, perfurações, fraturas.'}, {'categoria': 'acidente', 'risco': 'Eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular.'}, {'categoria': 'acidente', 'risco': 'Incêndio e Explosão', 'possiveis_danos': 'Queimaduras, asfixia, lesões por impacto.'}, {'categoria': 'acidente', 'risco': 'Animais Peçonhentos', 'possiveis_danos': 'Picadas, mordidas, reações alérgicas, envenenamento.'}, {'categoria': 'acidente', 'risco': 'Armazenamento Inadequado', 'possiveis_danos': 'Quedas de materiais, esmagamentos, soterramentos.'}, {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'}, {'categoria': 'acidente', 'risco': 'Espaços Confinados', 'possiveis_danos': 'Asfixia, intoxicações, explosões.'}, {'categoria': 'acidente', 'risco': 'Condução de Veículos', 'possiveis_danos': 'Acidentes de trânsito, lesões diversas.'}, {'categoria': 'acidente', 'risco': 'Projeção de Partículas', 'possiveis_danos': 'Lesões oculares, cortes na pele.'}])
 
 # --- Interface do Streamlit ---
-# O restante da interface (UI) continua o mesmo.
-# Apenas a lógica interna de substituição de texto foi alterada.
 st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Geração automática de OS a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
 st.sidebar.markdown("### 📁 Arquivos Necessários")
 arquivo_funcionarios = st.sidebar.file_uploader("1. Planilha de Funcionários (.xlsx)", type="xlsx")
