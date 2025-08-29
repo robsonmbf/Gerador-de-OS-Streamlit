@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Inches, Pt # Importa a classe Pt para definir o tamanho da fonte
+from docx.shared import Inches, Pt
 import os
 import zipfile
 from io import BytesIO
@@ -17,12 +17,22 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# --- INICIALIZAÇÃO DO SESSION STATE ---
+if 'medicoes_adicionadas' not in st.session_state:
+    st.session_state.medicoes_adicionadas = []
+
+# --- LISTA DE UNIDADES DE MEDIDA ---
+UNIDADES_DE_MEDIDA = [
+    "dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", 
+    "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", 
+    "Não aplicável"
+]
+
 # --- Funções de Lógica de Negócio ---
 
 def normalizar_texto(texto):
     """Função auxiliar para limpar e padronizar strings para comparação."""
-    if not isinstance(texto, str):
-        return ""
+    if not isinstance(texto, str): return ""
     texto = texto.lower().strip()
     texto = re.sub(r'[\s\W_]+', '', texto) 
     return texto
@@ -62,51 +72,31 @@ def carregar_planilha(arquivo):
         st.error(f"Erro ao ler o ficheiro Excel: {e}")
         return None
 
-# --- FUNÇÃO DE SUBSTITUIÇÃO COM ESTILO DE FONTE ---
 def substituir_placeholders(doc, contexto):
-    """
-    Substitui os placeholders em todo o documento, aplicando o estilo de fonte desejado.
-    """
-    # Processa parágrafos no corpo do documento
+    """Substitui os placeholders em todo o documento, aplicando o estilo de fonte desejado."""
     for p in doc.paragraphs:
         full_text = "".join(run.text for run in p.runs)
-        if not full_text.strip():
-            continue
-            
+        if not full_text.strip(): continue
         original_text = full_text
         for key, value in contexto.items():
-            if key in full_text:
-                full_text = full_text.replace(key, str(value))
-        
+            if key in full_text: full_text = full_text.replace(key, str(value))
         if original_text != full_text:
-            for run in p.runs:
-                run.text = ''
-            
-            # Adiciona o novo texto e aplica o estilo
+            for run in p.runs: run.text = ''
             new_run = p.add_run(full_text)
             font = new_run.font
             font.name = 'Calibri'
             font.size = Pt(11)
-
-    # Processa parágrafos dentro de tabelas
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
                     full_text = "".join(run.text for run in p.runs)
-                    if not full_text.strip():
-                        continue
-                        
+                    if not full_text.strip(): continue
                     original_text = full_text
                     for key, value in contexto.items():
-                        if key in full_text:
-                            full_text = full_text.replace(key, str(value))
-                    
+                        if key in full_text: full_text = full_text.replace(key, str(value))
                     if original_text != full_text:
-                        for run in p.runs:
-                            run.text = ''
-                        
-                        # Adiciona o novo texto e aplica o estilo
+                        for run in p.runs: run.text = ''
                         new_run = p.add_run(full_text)
                         font = new_run.font
                         font.name = 'Calibri'
@@ -115,18 +105,15 @@ def substituir_placeholders(doc, contexto):
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, modelo_doc_carregado, logo_path=None):
     """Gera uma única Ordem de Serviço."""
     doc = Document(modelo_doc_carregado)
-
     if logo_path:
         try:
             p = doc.tables[0].cell(0, 0).paragraphs[0]
-            for run in p.runs:
-                run.text = ''
+            for run in p.runs: run.text = ''
             p.add_run().add_picture(logo_path, width=Inches(1.5))
         except Exception:
             st.warning("Aviso: Não foi possível inserir a logo. Verifique se o modelo .docx possui uma tabela no cabeçalho.")
-            
-    riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     
+    riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     riscos_por_categoria = {cat: [] for cat in ["fisico", "quimico", "biologico", "ergonomico", "acidente"]}
     danos_por_categoria = {cat: [] for cat in ["fisico", "quimico", "biologico", "ergonomico", "acidente"]}
     
@@ -135,33 +122,28 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         if categoria in riscos_por_categoria:
             riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
             danos = risco_row.get("possiveis_danos")
-            if pd.notna(danos):
-                danos_por_categoria[categoria].append(str(danos))
+            if pd.notna(danos): danos_por_categoria[categoria].append(str(danos))
 
     if perigo_manual and categoria_manual:
         map_categorias = {"🔥 Físicos": "fisico", "⚗️ Químicos": "quimico", "🦠 Biológicos": "biologico", "🏃 Ergonômicos": "ergonomico", "⚠️ Acidentes": "acidente"}
         categoria_alvo = map_categorias.get(categoria_manual)
         if categoria_alvo:
             riscos_por_categoria[categoria_alvo].append(perigo_manual)
-            if danos_manuais:
-                danos_por_categoria[categoria_alvo].append(danos_manuais)
+            if danos_manuais: danos_por_categoria[categoria_alvo].append(danos_manuais)
 
     epis_recomendados = set(epi.strip() for epi in epis_manuais.split(',') if epi.strip())
     
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
-        try:
-            data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
-        except Exception:
-            data_admissao = str(funcionario['data_de_admissao'])
+        try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
+        except Exception: data_admissao = str(funcionario['data_de_admissao'])
 
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
 
     def tratar_lista_vazia(lista, separador=", "):
-        if not lista or all(not item.strip() for item in lista):
-            return "Não identificado"
+        if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(lista))))
 
     contexto = {
@@ -218,19 +200,12 @@ else:
     df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'] == funcao_sel] if funcao_sel != "Todos" else df_filtrado_setor
     
     st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados.")
-
     colunas_desejadas = ['nome_do_funcionario', 'setor', 'funcao']
     colunas_existentes = [col for col in colunas_desejadas if col in df_final_filtrado.columns]
-    colunas_faltantes = [col for col in colunas_desejadas if col not in df_final_filtrado.columns]
-
-    if colunas_faltantes:
-        st.warning(f"⚠️ Atenção: As seguintes colunas não foram encontradas ou reconhecidas na sua planilha: **{', '.join(colunas_faltantes)}**. Verifique os nomes dos cabeçalhos no seu arquivo Excel para a funcionalidade completa.")
-    
     if not colunas_existentes:
-        st.error("❌ Nenhuma das colunas essenciais (nome, setor, função) foi encontrada. O aplicativo não pode continuar. Por favor, verifique sua planilha.")
+        st.error("❌ Nenhuma das colunas essenciais (nome, setor, função) foi encontrada. Verifique sua planilha.")
     else:
         st.dataframe(df_final_filtrado[colunas_existentes], use_container_width=True)
-
         st.markdown('### ⚠️ Configuração de Riscos')
         categorias = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
         riscos_selecionados = []
@@ -241,14 +216,46 @@ else:
                 selecionados = st.multiselect(f"Selecione os riscos:", options=riscos_categoria, key=f"riscos_{key}")
                 riscos_selecionados.extend(selecionados)
 
-        with st.expander("➕ Adicionar Risco Manual, EPIs e Medições"):
-            perigo_manual = st.text_input("Descrição do Risco Manual")
-            categoria_manual = st.selectbox("Categoria do Risco Manual", [""] + list(categorias.values()))
-            danos_manuais = st.text_area("Possíveis Danos do Risco Manual")
-            epis_manuais = st.text_area("EPIs (separados por vírgula)")
-            medicoes_manuais = st.text_area("Medições (uma por linha)")
+        # --- SEPARAÇÃO DOS MENUS EXPANSÍVEIS ---
+        with st.expander("➕ Adicionar Risco Manual"):
+            perigo_manual = st.text_input("Descrição do Risco")
+            categoria_manual = st.selectbox("Categoria do Risco", [""] + list(categorias.values()))
+            danos_manuais = st.text_area("Possíveis Danos")
+        
+        with st.expander("🦺 Adicionar EPIs"):
+            epis_manuais = st.text_area("EPIs Adicionais (separados por vírgula)")
 
+        with st.expander("📊 Adicionar Medições Ambientais"):
+            col1, col2, col3 = st.columns([2,1,1])
+            with col1:
+                agente_medicao = st.text_input("Agente/Fonte do Risco", key="agente_medicao")
+            with col2:
+                valor_medicao = st.text_input("Valor Medido", key="valor_medicao")
+            with col3:
+                unidade_medicao = st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_medicao")
+
+            col_btn1, col_btn2, col_btn3 = st.columns([1,1,2])
+            with col_btn1:
+                if st.button("Adicionar Medição"):
+                    if agente_medicao and valor_medicao:
+                        medicao_str = f"{agente_medicao}: {valor_medicao} {unidade_medicao}"
+                        st.session_state.medicoes_adicionadas.append(medicao_str)
+                        # Limpa os campos após adicionar (opcional, mas melhora a usabilidade)
+                        st.session_state.agente_medicao = ""
+                        st.session_state.valor_medicao = ""
+                    else:
+                        st.warning("Preencha o Agente e o Valor para adicionar uma medição.")
+            with col_btn2:
+                if st.button("Limpar Medições"):
+                    st.session_state.medicoes_adicionadas = []
+
+            if st.session_state.medicoes_adicionadas:
+                st.write("**Medições Adicionadas:**")
+                for med in st.session_state.medicoes_adicionadas:
+                    st.markdown(f"- {med}")
+            
         if st.button("🚀 Gerar OSs para Funcionários Selecionados", type="primary"):
+            medicoes_finais = "\n".join(st.session_state.medicoes_adicionadas)
             with st.spinner("Gerando documentos..."):
                 documentos_gerados = []
                 logo_path = None
@@ -258,7 +265,7 @@ else:
                         logo_path = temp.name
 
                 for _, func in df_final_filtrado.iterrows():
-                    doc = gerar_os(func, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, arquivo_modelo_os, logo_path)
+                    doc = gerar_os(func, df_pgr, riscos_selecionados, epis_manuais, medicoes_finais, perigo_manual, danos_manuais, categoria_manual, arquivo_modelo_os, logo_path)
                     doc_io = BytesIO()
                     doc.save(doc_io)
                     doc_io.seek(0)
@@ -266,11 +273,9 @@ else:
                     documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
 
                 if logo_path: os.unlink(logo_path)
-
                 if documentos_gerados:
                     zip_buffer = BytesIO()
                     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                         for nome, conteudo in documentos_gerados: zf.writestr(nome, conteudo)
-                    
                     st.success(f"🎉 {len(documentos_gerados)} Ordens de Serviço geradas!")
                     st.download_button("📥 Baixar Todas as OSs (.zip)", data=zip_buffer.getvalue(), file_name=f"Ordens_de_Servico_{time.strftime('%Y%m%d')}.zip", mime="application/zip")
