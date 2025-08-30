@@ -20,25 +20,38 @@ st.set_page_config(
 # --- INICIALIZAÇÃO DO SESSION STATE ---
 if 'medicoes_adicionadas' not in st.session_state:
     st.session_state.medicoes_adicionadas = []
+if 'riscos_manuais_adicionados' not in st.session_state:
+    st.session_state.riscos_manuais_adicionados = []
+if 'historico_geracao' not in st.session_state:
+    st.session_state.historico_geracao = pd.DataFrame(columns=['Funcionário', 'Setor', 'Cargo/Função'])
 
-# --- LISTA DE UNIDADES DE MEDIDA ---
+
+# --- LISTAS DE DADOS CONSTANTES ---
 UNIDADES_DE_MEDIDA = [
     "dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", 
     "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", 
     "Não aplicável"
 ]
 
+# NOVO: Lista de agentes agora está fixa no código
+AGENTES_DE_RISCO = sorted([
+    "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro",
+    "Vibração de Mãos e Braços", "Radiações Ionizantes", "Radiações Não-Ionizantes",
+    "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", "Fumos", "Névoas",
+    "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus",
+    "Bactérias", "Protozoários", "Fungos", "Parasitas", "Bacilos"
+])
+
+
 # --- Funções de Lógica de Negócio ---
 
 def normalizar_texto(texto):
-    """Função auxiliar para limpar e padronizar strings para comparação."""
     if not isinstance(texto, str): return ""
     texto = texto.lower().strip()
     texto = re.sub(r'[\s\W_]+', '', texto) 
     return texto
 
 def mapear_e_renomear_colunas_funcionarios(df):
-    """Mapeia e renomeia colunas da planilha de funcionários de forma robusta."""
     mapeamento = {
         'nome_do_funcionario': ['nomedofuncionario', 'nome', 'funcionario', 'funcionário', 'colaborador', 'nomecompleto'],
         'funcao': ['funcao', 'função', 'cargo'],
@@ -64,7 +77,6 @@ def mapear_e_renomear_colunas_funcionarios(df):
 
 @st.cache_data
 def carregar_planilha(arquivo):
-    """Carrega uma planilha do Excel."""
     if arquivo is None: return None
     try:
         return pd.read_excel(arquivo)
@@ -73,7 +85,6 @@ def carregar_planilha(arquivo):
         return None
 
 def substituir_placeholders(doc, contexto):
-    """Substitui os placeholders em todo o documento, aplicando o estilo de fonte desejado."""
     for p in doc.paragraphs:
         full_text = "".join(run.text for run in p.runs)
         if not full_text.strip(): continue
@@ -102,8 +113,7 @@ def substituir_placeholders(doc, contexto):
                         font.name = 'Calibri'
                         font.size = Pt(11)
 
-def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, perigo_manual, danos_manuais, categoria_manual, modelo_doc_carregado, logo_path=None):
-    """Gera uma única Ordem de Serviço."""
+def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado, logo_path=None):
     doc = Document(modelo_doc_carregado)
     if logo_path:
         try:
@@ -124,12 +134,15 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             danos = risco_row.get("possiveis_danos")
             if pd.notna(danos): danos_por_categoria[categoria].append(str(danos))
 
-    if perigo_manual and categoria_manual:
+    if riscos_manuais:
         map_categorias = {"🔥 Físicos": "fisico", "⚗️ Químicos": "quimico", "🦠 Biológicos": "biologico", "🏃 Ergonômicos": "ergonomico", "⚠️ Acidentes": "acidente"}
-        categoria_alvo = map_categorias.get(categoria_manual)
-        if categoria_alvo:
-            riscos_por_categoria[categoria_alvo].append(perigo_manual)
-            if danos_manuais: danos_por_categoria[categoria_alvo].append(danos_manuais)
+        for risco_manual in riscos_manuais:
+            categoria_display = risco_manual.get('categoria')
+            categoria_alvo = map_categorias.get(categoria_display)
+            if categoria_alvo:
+                riscos_por_categoria[categoria_alvo].append(risco_manual.get('risco', ''))
+                if risco_manual.get('danos'):
+                    danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
 
     epis_recomendados = set(epi.strip() for epi in epis_manuais.split(',') if epi.strip())
     
@@ -172,7 +185,6 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     return doc
 
 def obter_dados_pgr():
-    """Retorna os dados PGR padrão incorporados no sistema."""
     return pd.DataFrame([{'categoria': 'fisico', 'risco': 'Ruído', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'}, {'categoria': 'fisico', 'risco': 'Vibração', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios.'}, {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'}, {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'}, {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'}, {'categoria': 'fisico', 'risco': 'Radiações Não Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'}, {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'}, {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites.'}, {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses, irritação respiratória, alergias.'}, {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias, intoxicações.'}, {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'}, {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'}, {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'}, {'categoria': 'quimico', 'risco': 'Substâncias Químicas (líquidos e sólidos)', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'}, {'categoria': 'quimico', 'risco': 'Agrotóxicos', 'possiveis_danos': 'Intoxicações, dermatites, câncer.'}, {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções, doenças infecciosas.'}, {'categoria': 'biologico', 'risco': 'Fungos', 'possiveis_danos': 'Micoses, alergias, infecções respiratórias.'}, {'categoria': 'biologico', 'risco': 'Vírus', 'possiveis_danos': 'Doenças virais, infecções.'}, {'categoria': 'biologico', 'risco': 'Parasitas', 'possiveis_danos': 'Doenças parasitárias, infecções.'}, {'categoria': 'biologico', 'risco': 'Protozoários', 'possiveis_danos': 'Doenças parasitárias.'}, {'categoria': 'biologico', 'risco': 'Bacilos', 'possiveis_danos': 'Infecções diversas, como tuberculose.'}, {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'}, {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'}, {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'}, {'categoria': 'ergonomico', 'risco': 'Jornada de Trabalho Prolongada', 'possiveis_danos': 'Fadiga, estresse, acidentes de trabalho.'}, {'categoria': 'ergonomico', 'risco': 'Monotonia e Ritmo Excessivo', 'possiveis_danos': 'Estresse, fadiga mental, desmotivação.'}, {'categoria': 'ergonomico', 'risco': 'Controle Rígido de Produtividade', 'possiveis_danos': 'Estresse, ansiedade, burnout.'}, {'categoria': 'ergonomico', 'risco': 'Iluminação Inadequada', 'possiveis_danos': 'Fadiga visual, dores de cabeça.'}, {'categoria': 'ergonomico', 'risco': 'Mobiliário Inadequado', 'possiveis_danos': 'Dores musculares, lesões na coluna.'}, {'categoria': 'acidente', 'risco': 'Arranjo Físico Inadequado', 'possiveis_danos': 'Quedas, colisões, esmagamentos.'}, {'categoria': 'acidente', 'risco': 'Máquinas e Equipamentos sem Proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'}, {'categoria': 'acidente', 'risco': 'Ferramentas Inadequadas ou Defeituosas', 'possiveis_danos': 'Cortes, perfurações, fraturas.'}, {'categoria': 'acidente', 'risco': 'Eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular.'}, {'categoria': 'acidente', 'risco': 'Incêndio e Explosão', 'possiveis_danos': 'Queimaduras, asfixia, lesões por impacto.'}, {'categoria': 'acidente', 'risco': 'Animais Peçonhentos', 'possiveis_danos': 'Picadas, mordidas, reações alérgicas, envenenamento.'}, {'categoria': 'acidente', 'risco': 'Armazenamento Inadequado', 'possiveis_danos': 'Quedas de materiais, esmagamentos, soterramentos.'}, {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'}, {'categoria': 'acidente', 'risco': 'Espaços Confinados', 'possiveis_danos': 'Asfixia, intoxicações, explosões.'}, {'categoria': 'acidente', 'risco': 'Condução de Veículos', 'possiveis_danos': 'Acidentes de trânsito, lesões diversas.'}, {'categoria': 'acidente', 'risco': 'Projeção de Partículas', 'possiveis_danos': 'Lesões oculares, cortes na pele.'}])
 
 # --- Interface do Streamlit ---
@@ -181,7 +193,7 @@ st.sidebar.markdown("### 📁 Arquivos Necessários")
 arquivo_funcionarios = st.sidebar.file_uploader("1. Planilha de Funcionários (.xlsx)", type="xlsx")
 arquivo_modelo_os = st.sidebar.file_uploader("2. Modelo de OS (.docx)", type="docx")
 arquivo_logo = st.sidebar.file_uploader("3. Logo da Empresa (Opcional)", type=["png", "jpg", "jpeg"])
-st.sidebar.info("É obrigatório carregar a planilha e o modelo de OS para iniciar.")
+st.sidebar.info("A lista de agentes de risco para medições já está integrada ao sistema.")
 
 if not arquivo_funcionarios or not arquivo_modelo_os:
     st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS (.docx) na barra lateral para começar.")
@@ -189,6 +201,17 @@ else:
     df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
     df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
     df_pgr = obter_dados_pgr()
+
+    st.markdown("---")
+    st.markdown("### 📜 Histórico de OS Geradas na Sessão")
+    if not st.session_state.historico_geracao.empty:
+        st.dataframe(st.session_state.historico_geracao, use_container_width=True)
+        if st.button("Limpar Histórico"):
+            st.session_state.historico_geracao = pd.DataFrame(columns=['Funcionário', 'Setor', 'Cargo/Função'])
+            st.rerun()
+    else:
+        st.info("Nenhuma Ordem de Serviço foi gerada nesta sessão ainda.")
+    st.markdown("---")
 
     st.markdown('### 👥 Seleção de Funcionários')
     setores = ["Todos"] + (df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else [])
@@ -199,7 +222,7 @@ else:
     funcao_sel = st.selectbox("Filtrar por Função/Cargo", funcoes)
     df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'] == funcao_sel] if funcao_sel != "Todos" else df_filtrado_setor
     
-    st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados.")
+    st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados para o próximo lote.")
     colunas_desejadas = ['nome_do_funcionario', 'setor', 'funcao']
     colunas_existentes = [col for col in colunas_desejadas if col in df_final_filtrado.columns]
     if not colunas_existentes:
@@ -215,19 +238,56 @@ else:
                 riscos_categoria = df_pgr[df_pgr['categoria'] == key]['risco'].tolist()
                 selecionados = st.multiselect(f"Selecione os riscos:", options=riscos_categoria, key=f"riscos_{key}")
                 riscos_selecionados.extend(selecionados)
-
-        # --- SEPARAÇÃO DOS MENUS EXPANSÍVEIS ---
-        with st.expander("➕ Adicionar Risco Manual"):
-            perigo_manual = st.text_input("Descrição do Risco")
-            categoria_manual = st.selectbox("Categoria do Risco", [""] + list(categorias.values()))
-            danos_manuais = st.text_area("Possíveis Danos")
         
+        if riscos_selecionados:
+            st.markdown("---")
+            st.info(f"**Resumo de Riscos Selecionados ({len(riscos_selecionados)} no total)**")
+            riscos_categorizados_para_display = {}
+            for risco_nome in sorted(riscos_selecionados):
+                categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                if not categoria_key_series.empty:
+                    categoria_key = categoria_key_series.iloc[0]
+                    categoria_display = categorias.get(categoria_key, "Outros")
+                    if categoria_display not in riscos_categorizados_para_display:
+                        riscos_categorizados_para_display[categoria_display] = []
+                    riscos_categorizados_para_display[categoria_display].append(risco_nome)
+            for categoria, lista_riscos in riscos_categorizados_para_display.items():
+                with st.container():
+                    st.markdown(f"**{categoria}**")
+                    for risk in lista_riscos:
+                        st.markdown(f"&nbsp;&nbsp;&nbsp; - {risk}")
+            st.markdown("---")
+
+        with st.expander("➕ Adicionar Risco Manual"):
+            def adicionar_risco_manual():
+                risco = st.session_state.risco_input
+                categoria = st.session_state.categoria_input
+                danos = st.session_state.danos_input
+                if risco and categoria:
+                    st.session_state.riscos_manuais_adicionados.append({"risco": risco,"categoria": categoria,"danos": danos})
+                    st.session_state.risco_input = ""
+                    st.session_state.danos_input = ""
+                else:
+                    st.warning("Preencha a Descrição e a Categoria do Risco para adicioná-lo.")
+            def limpar_riscos_manuais():
+                st.session_state.riscos_manuais_adicionados = []
+            
+            st.text_input("Descrição do Risco", key="risco_input")
+            st.selectbox("Categoria do Risco", [""] + list(categorias.values()), key="categoria_input")
+            st.text_area("Possíveis Danos", key="danos_input")
+            c1, c2, _ = st.columns([1,1,2])
+            with c1: st.button("Adicionar Risco", on_click=adicionar_risco_manual)
+            with c2: st.button("Limpar Lista de Riscos", on_click=limpar_riscos_manuais)
+            
+            if st.session_state.riscos_manuais_adicionados:
+                st.write("**Riscos Manuais Adicionados:**")
+                for r in st.session_state.riscos_manuais_adicionados:
+                    st.markdown(f"- **{r['risco']}** ({r['categoria']}): {r['danos']}")
+
         with st.expander("🦺 Adicionar EPIs"):
             epis_manuais = st.text_area("EPIs Adicionais (separados por vírgula)")
 
-        # --- SEÇÃO DE MEDIÇÕES CORRIGIDA COM on_click ---
         with st.expander("📊 Adicionar Medições Ambientais"):
-            # Funções de callback para manipular o estado
             def adicionar_medicao():
                 agente = st.session_state.agente_input
                 valor = st.session_state.valor_input
@@ -235,29 +295,22 @@ else:
                 if agente and valor:
                     medicao_str = f"{agente}: {valor} {unidade}"
                     st.session_state.medicoes_adicionadas.append(medicao_str)
-                    # Limpa os campos de input
                     st.session_state.agente_input = ""
                     st.session_state.valor_input = ""
                 else:
                     st.warning("Preencha o Agente e o Valor para adicionar uma medição.")
-            
             def limpar_medicoes():
                 st.session_state.medicoes_adicionadas = []
 
-            # Interface de usuário
             col1, col2, col3 = st.columns([2,1,1])
             with col1:
-                st.text_input("Agente/Fonte do Risco", key="agente_input")
-            with col2:
-                st.text_input("Valor Medido", key="valor_input")
-            with col3:
-                st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_input")
-
+                st.selectbox("Agente/Fonte do Risco", options=[""] + AGENTES_DE_RISCO, key="agente_input")
+            with col2: st.text_input("Valor Medido", key="valor_input")
+            with col3: st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_input")
+            
             col_btn1, col_btn2, _ = st.columns([1,1,2])
-            with col_btn1:
-                st.button("Adicionar Medição", on_click=adicionar_medicao)
-            with col_btn2:
-                st.button("Limpar Lista", on_click=limpar_medicoes)
+            with col_btn1: st.button("Adicionar Medição", on_click=adicionar_medicao)
+            with col_btn2: st.button("Limpar Lista de Medições", on_click=limpar_medicoes)
 
             if st.session_state.medicoes_adicionadas:
                 st.write("**Medições Adicionadas:**")
@@ -266,8 +319,11 @@ else:
             
         if st.button("🚀 Gerar OSs para Funcionários Selecionados", type="primary"):
             medicoes_finais = "\n".join(st.session_state.medicoes_adicionadas)
+            riscos_manuais_finais = st.session_state.riscos_manuais_adicionados
+
             with st.spinner("Gerando documentos..."):
                 documentos_gerados = []
+                os_geradas_info_batch = [] 
                 logo_path = None
                 if arquivo_logo:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(arquivo_logo.name)[1]) as temp:
@@ -275,17 +331,36 @@ else:
                         logo_path = temp.name
 
                 for _, func in df_final_filtrado.iterrows():
-                    doc = gerar_os(func, df_pgr, riscos_selecionados, epis_manuais, medicoes_finais, perigo_manual, danos_manuais, categoria_manual, arquivo_modelo_os, logo_path)
+                    doc = gerar_os(func, df_pgr, riscos_selecionados, epis_manuais, medicoes_finais, riscos_manuais_finais, arquivo_modelo_os, logo_path)
                     doc_io = BytesIO()
                     doc.save(doc_io)
                     doc_io.seek(0)
-                    nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Funcionario_Sem_Nome")).strip().replace(" ", "_")
+                    nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
                     documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
+                    os_geradas_info_batch.append({
+                        'Funcionário': func.get("nome_do_funcionario", "N/A"),
+                        'Setor': func.get("setor", "N/A"),
+                        'Cargo/Função': func.get("funcao", "N/A")
+                    })
 
                 if logo_path: os.unlink(logo_path)
+                
                 if documentos_gerados:
+                    df_resumo_batch = pd.DataFrame(os_geradas_info_batch)
+                    st.session_state.historico_geracao = pd.concat([st.session_state.historico_geracao, df_resumo_batch]).drop_duplicates().reset_index(drop=True)
                     zip_buffer = BytesIO()
-                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                        for nome, conteudo in documentos_gerados: zf.writestr(nome, conteudo)
-                    st.success(f"🎉 {len(documentos_gerados)} Ordens de Serviço geradas!")
-                    st.download_button("📥 Baixar Todas as OSs (.zip)", data=zip_buffer.getvalue(), file_name=f"Ordens_de_Servico_{time.strftime('%Y%m%d')}.zip", mime="application/zip")
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for nome_arquivo, conteudo_doc in documentos_gerados:
+                            zip_file.writestr(nome_arquivo, conteudo_doc)
+                    
+                    st.success(f"🎉 {len(documentos_gerados)} Ordens de Serviço geradas para o grupo selecionado!")
+                    
+                    st.download_button(
+                        label="📥 Baixar Lote Atual (.zip)",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"OS_{setor_sel}_{funcao_sel}_{time.strftime('%Y%m%d')}.zip",
+                        mime="application/zip"
+                    )
+                    
+                    with st.expander("📄 Resumo do Lote Gerado", expanded=True):
+                        st.dataframe(df_resumo_batch, use_container_width=True)
