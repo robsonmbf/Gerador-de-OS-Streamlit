@@ -323,6 +323,24 @@ with st.container(border=True):
             selecionados = st.multiselect(f"Selecione os riscos:", options=riscos_categoria, key=f"riscos_{key}", default=[])
             riscos_selecionados.extend(selecionados)
 
+    # --- Resumo dos Riscos Selecionados ---
+    if riscos_selecionados:
+        with st.expander(f"**Resumo de Riscos Selecionados ({len(riscos_selecionados)} no total)**", expanded=True):
+            riscos_categorizados_para_display = {}
+            for risco_nome in sorted(riscos_selecionados):
+                categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                if not categoria_key_series.empty:
+                    categoria_key = categoria_key_series.iloc[0]
+                    categoria_display = CATEGORIAS_RISCO.get(categoria_key, "Outros")
+                    if categoria_display not in riscos_categorizados_para_display:
+                        riscos_categorizados_para_display[categoria_display] = []
+                    riscos_categorizados_para_display[categoria_display].append(risco_nome)
+            
+            for categoria, lista_riscos in riscos_categorizados_para_display.items():
+                st.markdown(f"**{categoria}**")
+                for risk in lista_riscos:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp; - {risk}")
+
     # --- Adição de Medições, Riscos Manuais e EPIs ---
     col_exp1, col_exp2, col_exp3 = st.columns(3)
     with col_exp1:
