@@ -164,23 +164,35 @@ def substituir_placeholders(doc, contexto):
                     all_elements.extend(cell.paragraphs)
 
     for p in all_elements:
-        full_text = "".join(run.text for run in p.runs)
-        if not full_text.strip(): continue
-
-        # Otimiza a substituição para evitar corromper a formatação
-        for key, value in contexto.items():
-            if key in full_text:
-                full_text = full_text.replace(str(key), str(value))
+        # Constrói o texto completo do parágrafo a partir de seus 'runs'
+        inline_text = "".join(r.text for r in p.runs)
         
-        # Limpa o parágrafo e adiciona o novo texto com formatação padrão
-        for i in range(len(p.runs)):
-            p.runs[i].text = ''
-        if p.runs:
-            run = p.runs[0]
-            run.text = full_text
-            font = run.font
-            font.name = 'Segoe UI'
-            font.size = Pt(9)
+        # Pula para o próximo parágrafo se não houver placeholders nele
+        if not any(key in inline_text for key in contexto):
+            continue
+
+        original_text = inline_text
+        
+        # Realiza as substituições no texto em memória
+        for key, value in contexto.items():
+            inline_text = inline_text.replace(str(key), str(value))
+
+        # Se o texto foi alterado, reescreve o parágrafo tratando as quebras de linha
+        if original_text != inline_text:
+            p.text = ""  # Limpa todo o conteúdo do parágrafo (todos os 'runs')
+            
+            lines = inline_text.split('\n')
+            for i, line in enumerate(lines):
+                if i > 0:
+                    p.add_run().add_break()  # Adiciona uma quebra de linha suave (Shift+Enter)
+                
+                # Adiciona o texto da linha atual
+                run = p.add_run(line)
+                # Reaplica a formatação padrão, garantindo que não fique em negrito
+                font = run.font
+                font.name = 'Segoe UI'
+                font.size = Pt(9)
+                font.bold = False # Garante que o texto não será negrito
             
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     """Função principal que gera um documento de Ordem de Serviço para um funcionário."""
