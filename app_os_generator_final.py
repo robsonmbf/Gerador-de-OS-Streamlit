@@ -201,14 +201,14 @@ else:
             st.session_state.cargos_concluidos.clear()
             st.rerun()
 
-        setores = ["Todos"] + (df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else [])
-        setor_sel = st.selectbox("Filtrar por Setor", setores, format_func=formatar_setor)
+        setores = df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else []
+        setor_sel = st.multiselect("Filtrar por Setor(es)", setores, default=setores, format_func=formatar_setor)
         
-        df_filtrado_setor = df_funcionarios[df_funcionarios['setor'] == setor_sel] if setor_sel != "Todos" else df_funcionarios
-        funcoes = ["Todos"] + (df_filtrado_setor['funcao'].dropna().unique().tolist() if 'funcao' in df_filtrado_setor.columns else [])
-        funcao_sel = st.selectbox("Filtrar por Função/Cargo", funcoes, format_func=formatar_cargo)
+        df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
+        funcoes = df_filtrado_setor['funcao'].dropna().unique().tolist() if 'funcao' in df_filtrado_setor.columns else []
+        funcao_sel = st.multiselect("Filtrar por Função/Cargo(s)", funcoes, default=funcoes, format_func=formatar_cargo)
         
-        df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'] == funcao_sel] if funcao_sel != "Todos" else df_filtrado_setor
+        df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados para o próximo lote.")
         
         colunas_desejadas = ['nome_do_funcionario', 'setor', 'funcao']
@@ -322,18 +322,24 @@ else:
                         os_geradas_info_batch.append({'Funcionário': func.get("nome_do_funcionario", "N/A"),'Setor': func.get("setor", "N/A"),'Cargo/Função': func.get("funcao", "N/A")})
 
                     if documentos_gerados:
-                        if setor_sel != "Todos":
-                            st.session_state.setores_concluidos.add(setor_sel)
-                        if funcao_sel != "Todos":
-                            st.session_state.cargos_concluidos.add(funcao_sel)
+                        # Marcar setores e funções selecionados como concluídos
+                        for setor in setor_sel:
+                            st.session_state.setores_concluidos.add(setor)
+                        for funcao in funcao_sel:
+                            st.session_state.cargos_concluidos.add(funcao)
                         
                         df_resumo_batch = pd.DataFrame(os_geradas_info_batch)
                         zip_buffer = BytesIO()
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                             for nome_arquivo, conteudo_doc in documentos_gerados:
                                 zip_file.writestr(nome_arquivo, conteudo_doc)
+                        # Criar nome do arquivo baseado nas seleções
+                        setores_nome = "_".join(setor_sel[:2]) if len(setor_sel) <= 2 else f"{setor_sel[0]}_e_outros"
+                        funcoes_nome = "_".join(funcao_sel[:2]) if len(funcao_sel) <= 2 else f"{funcao_sel[0]}_e_outros"
+                        nome_arquivo_zip = f"OS_{setores_nome}_{funcoes_nome}_{time.strftime('%Y%m%d')}.zip".replace(' ', '_')
+                        
                         st.success(f"🎉 {len(documentos_gerados)} Ordens de Serviço geradas!")
-                        st.download_button(label="📥 Baixar Lote Atual (.zip)", data=zip_buffer.getvalue(), file_name=f"OS_{setor_sel.replace(' ','_')}_{funcao_sel.replace(' ','_')}_{time.strftime('%Y%m%d')}.zip", mime="application/zip")
+                        st.download_button(label="📥 Baixar Lote Atual (.zip)", data=zip_buffer.getvalue(), file_name=nome_arquivo_zip, mime="application/zip")
                         with st.expander("📄 Resumo do Lote Gerado", expanded=True):
                             st.dataframe(df_resumo_batch, use_container_width=True)
                         
