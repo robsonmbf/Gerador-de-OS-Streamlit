@@ -109,8 +109,9 @@ def substituir_placeholders(doc, contexto):
             for run in p.runs: run.text = ''
             new_run = p.add_run(full_text)
             font = new_run.font
-            font.name = 'Calibri'
-            font.size = Pt(11)
+            font.name = 'Segoe UI'
+            font.size = Pt(9)
+            
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -201,12 +202,12 @@ else:
             st.session_state.cargos_concluidos.clear()
             st.rerun()
 
-        setores = df_funcionarios['setor'].dropna().unique().tolist() if 'setor' in df_funcionarios.columns else []
-        setor_sel = st.multiselect("Filtrar por Setor(es)", setores, default=setores, format_func=formatar_setor)
+        setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
+        setor_sel = st.multiselect("Filtrar por Setor(es)", setores, format_func=formatar_setor)
         
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        funcoes = df_filtrado_setor['funcao'].dropna().unique().tolist() if 'funcao' in df_filtrado_setor.columns else []
-        funcao_sel = st.multiselect("Filtrar por Função/Cargo(s)", funcoes, default=funcoes, format_func=formatar_cargo)
+        funcoes = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
+        funcao_sel = st.multiselect("Filtrar por Função/Cargo(s)", funcoes, format_func=formatar_cargo)
         
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         st.success(f"✅ {len(df_final_filtrado)} funcionários selecionados para o próximo lote.")
