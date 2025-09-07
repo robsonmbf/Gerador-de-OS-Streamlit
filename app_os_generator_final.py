@@ -288,14 +288,24 @@ else:
                     agente = st.session_state.agente_input
                     valor = st.session_state.valor_input
                     unidade = st.session_state.unidade_input
-                    if agente and valor:
-                        medicao_str = f"{agente}: {valor} {unidade}"
+                    agente_selecionado = st.session_state.agente_input
+                    agente_manual = st.session_state.agente_manual_input if "agente_manual_input" in st.session_state else None
+                    agente_final = agente_manual if agente_selecionado == "Outro (digitar manualmente)" else agente_selecionado
+                    if agente_final and valor:  
+                        medicao_str = f"{agente_final}: {valor} {unidade}"
                         st.session_state.medicoes_adicionadas.append(medicao_str)
                         st.session_state.agente_input = ""; st.session_state.valor_input = ""
+                        if "agente_manual_input" in st.session_state:
+                            st.session_state.agente_manual_input = ""
                     else: st.warning("Preencha o Agente e o Valor para adicionar uma medição.")
                 def limpar_medicoes(): st.session_state.medicoes_adicionadas = []
                 col1, col2, col3 = st.columns([2,1,1])
-                with col1: st.selectbox("Agente/Fonte do Risco", options=[""] + AGENTES_DE_RISCO, key="agente_input")
+                with col1: 
+                    agente_selecionado = st.selectbox("Agente/Fonte do Risco", options=[""] + AGENTES_DE_RISCO + ["Outro (digitar manualmente)"], key="agente_input")
+                    if agente_selecionado == "Outro (digitar manualmente)":
+                        agente_manual = st.text_input("Digite o Agente/Fonte do Risco manualmente", key="agente_manual_input")
+                    else:
+                        agente_manual = None
                 with col2: st.text_input("Valor Medido", key="valor_input")
                 with col3: st.selectbox("Unidade de Medida", UNIDADES_DE_MEDIDA, key="unidade_input")
                 col_btn1, col_btn2, _ = st.columns([1,1,2])
