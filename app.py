@@ -69,7 +69,6 @@ st.markdown("""
         margin-bottom: 1rem;
         border: 1px solid #3DD56D; 
     }
-    /* CSS para os cartões de risco, removido pois usaremos st.container */
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,7 +86,6 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.success(message)
                         st.rerun()
                     else:
                         st.error(message)
@@ -152,7 +150,6 @@ def init_user_session_state():
         st.session_state.riscos_manuais_adicionados = []
     if 'cargos_concluidos' not in st.session_state:
         st.session_state.cargos_concluidos = set()
-
 
 def normalizar_texto(texto):
     if not isinstance(texto, str): return ""
@@ -355,36 +352,39 @@ def main():
         st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
         
         riscos_selecionados = []
-        
         if 'selecionar_todos' not in st.session_state:
             st.session_state.selecionar_todos = {}
 
         for categoria_key, categoria_nome in CATEGORIAS_RISCO.items():
-            with st.container(border=True): # Usando container para agrupar visualmente
-                st.subheader(categoria_nome)
-                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]
-                
-                if st.button(f"Selecionar/Limpar Todos - {categoria_nome.split(' ')[1]}", key=f"select_all_{categoria_key}"):
-                    current_state = st.session_state.selecionar_todos.get(categoria_key, False)
-                    st.session_state.selecionar_todos[categoria_key] = not current_state
-                    st.rerun()
+            st.subheader(categoria_nome)
+            riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]
+            
+            if st.button(f"Selecionar/Limpar Todos - {categoria_nome.split(' ')[1]}", key=f"select_all_{categoria_key}"):
+                current_state = st.session_state.selecionar_todos.get(categoria_key, False)
+                st.session_state.selecionar_todos[categoria_key] = not current_state
+                st.rerun()
 
-                select_all_value = st.session_state.selecionar_todos.get(categoria_key, False)
-                
-                col1, col2 = st.columns(2)
-                riscos_list = riscos_da_categoria.to_dict('records')
-                metade = len(riscos_list) // 2 + (len(riscos_list) % 2)
+            select_all_value = st.session_state.selecionar_todos.get(categoria_key, False)
+            
+            col1, col2 = st.columns(2)
+            riscos_list = riscos_da_categoria.to_dict('records')
+            metade = len(riscos_list) // 2 + (len(riscos_list) % 2)
 
-                for i, row in enumerate(riscos_list):
-                    col = col1 if i < metade else col2
-                    with col:
-                        selecionado = st.checkbox(f"**{row['risco']}**", key=f"risk_{row['risco']}", value=select_all_value)
+            for i, row in enumerate(riscos_list):
+                col = col1 if i < metade else col2
+                with col:
+                    with st.container(border=True):
+                        selecionado = st.checkbox(
+                            f"**{row['risco']}**", 
+                            key=f"risk_{row['risco']}", 
+                            value=select_all_value
+                        )
                         st.markdown(f"<small style='color: grey;'>{row['possiveis_danos']}</small>", unsafe_allow_html=True)
                         if selecionado:
                             riscos_selecionados.append(row['risco'])
-        
-        # --- INÍCIO DA SEÇÃO RESTAURADA E CORRIGIDA ---
-        st.divider()
+            st.divider()
+
+        # --- SEÇÃO DE FUNCIONALIDADES ADICIONAIS RESTAURADA ---
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
@@ -429,7 +429,7 @@ def main():
                     st.write("**Adicionados:**")
                     for epi_item in st.session_state.epis_adicionados:
                         st.markdown(f"- {epi_item}")
-        # --- FIM DA SEÇÃO RESTAURADA E CORRIGIDA ---
+        # --- FIM DA SEÇÃO RESTAURADA ---
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
