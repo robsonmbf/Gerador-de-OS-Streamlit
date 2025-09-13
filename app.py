@@ -86,7 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False 
+                        st.session_state.user_data_loaded = False
                         st.success(message)
                         st.rerun()
                     else:
@@ -229,97 +229,23 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
-# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MELHORADA ---
 def substituir_placeholders(doc, contexto):
-    """Substitui placeholders em parágrafos e tabelas, preservando melhor a formatação."""
-    # Processa parágrafos
-    for p in doc.paragraphs:
-        # Pula parágrafos vazios
-        if not p.text.strip():
-            continue
-            
-        # Junta o texto de todos os 'runs' para ter o texto completo do parágrafo
-        texto_completo_paragrafo = "".join(run.text for run in p.runs)
-        
-        for key, value in contexto.items():
-            if key in texto_completo_paragrafo:
-                # Armazena a formatação original do primeiro run do parágrafo
-                # para reaplicar nas partes que não são o valor do placeholder
-                primeiro_run = p.runs[0]
-                formato_original = {
-                    'bold': primeiro_run.bold,
-                    'italic': primeiro_run.italic,
-                    'underline': primeiro_run.underline,
-                    'font_name': primeiro_run.font.name,
-                    'font_size': primeiro_run.font.size
-                }
-
-                # Limpa o parágrafo
-                p.clear()
-
-                # Divide o texto em partes antes e depois do placeholder
-                partes = texto_completo_paragrafo.split(key)
-
-                for i, parte in enumerate(partes):
-                    # Adiciona a parte do texto antes/depois do placeholder com a formatação original
-                    run_parte = p.add_run(parte)
-                    run_parte.bold = formato_original['bold']
-                    run_parte.italic = formato_original['italic']
-                    run_parte.underline = formato_original['underline']
-                    if formato_original['font_name']:
-                        run_parte.font.name = formato_original['font_name']
-                    if formato_original['font_size']:
-                        run_parte.font.size = formato_original['font_size']
-                    
-                    # Adiciona o valor do placeholder (com formatação padrão), exceto para a última parte
-                    if i < len(partes) - 1:
-                        linhas_valor = str(value).split('\n')
-                        for j, linha in enumerate(linhas_valor):
-                            run_valor = p.add_run(linha)
-                            run_valor.bold = False
-                            run_valor.italic = False
-                            run_valor.underline = False
-                            run_valor.font.name = 'Segoe UI'
-                            run_valor.font.size = Pt(9)
-                            if j < len(linhas_valor) - 1:
-                                run_valor.add_break()
-                
-                # Atualiza o texto completo para a próxima iteração no mesmo parágrafo
-                texto_completo_paragrafo = "".join(run.text for run in p.runs)
-    # Processa tabelas da mesma forma
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    if not p.text.strip():
-                        continue
+                    if not p.text.strip(): continue
                     texto_completo_paragrafo = "".join(run.text for run in p.runs)
                     for key, value in contexto.items():
                         if key in texto_completo_paragrafo:
-                            primeiro_run = p.runs[0]
-                            formato_original = {
-                                'bold': primeiro_run.bold, 'italic': primeiro_run.italic, 'underline': primeiro_run.underline,
-                                'font_name': primeiro_run.font.name, 'font_size': primeiro_run.font.size
-                            }
-                            p.clear()
-                            partes = texto_completo_paragrafo.split(key)
-                            for i, parte in enumerate(partes):
-                                run_parte = p.add_run(parte)
-                                run_parte.bold = formato_original['bold']
-                                run_parte.italic = formato_original['italic']
-                                run_parte.underline = formato_original['underline']
-                                if formato_original['font_name']: run_parte.font.name = formato_original['font_name']
-                                if formato_original['font_size']: run_parte.font.size = formato_original['font_size']
-                                if i < len(partes) - 1:
-                                    linhas_valor = str(value).split('\n')
-                                    for j, linha in enumerate(linhas_valor):
-                                        run_valor = p.add_run(linha)
-                                        run_valor.bold = False; run_valor.italic = False; run_valor.underline = False
-                                        run_valor.font.name = 'Segoe UI'; run_valor.font.size = Pt(9)
-                                        if j < len(linhas_valor) - 1:
-                                            run_valor.add_break()
-                            texto_completo_paragrafo = "".join(run.text for run in p.runs)
-# --- FIM DA ALTERAÇÃO 1 ---
+                            p.text = p.text.replace(key, str(value))
+    for p in doc.paragraphs:
+        if not p.text.strip(): continue
+        texto_completo_paragrafo = "".join(run.text for run in p.runs)
+        for key, value in contexto.items():
+            if key in texto_completo_paragrafo:
+                p.text = p.text.replace(key, str(value))
+
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -347,7 +273,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     
     medicoes_formatadas = []
-    # --- INÍCIO DA ALTERAÇÃO 2: ALINHAMENTO CONSISTENTE DAS MEDIÇÕES ---
+    # --- INÍCIO DA ALTERAÇÃO: REMOÇÃO DO ALINHAMENTO ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
@@ -355,9 +281,9 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         epi = med.get('epi', '')
         
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        # Adiciona tabulação para um alinhamento consistente
-        medicoes_formatadas.append(f"{agente}:\t{valor} {unidade}{epi_info}")
-    # --- FIM DA ALTERAÇÃO 2 ---
+        # Formato simples, sem tabulação ou espaços extras
+        medicoes_formatadas.append(f"{agente}: {valor} {unidade}{epi_info}")
+    # --- FIM DA ALTERAÇÃO ---
 
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
@@ -505,7 +431,7 @@ def main():
         
         st.divider()
 
-        col_exp1, col_exp2, col_exp3 = st.columns(3)
+        col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
@@ -533,9 +459,6 @@ def main():
                             st.session_state.user_data_loaded = False
                             st.rerun()
         with col_exp2:
-            with st.expander("➕ **Adicionar Risco Manual (Alternativo)**"):
-                 st.info("Para adicionar riscos manuais, por favor, use a aba '➕ Manual' na seção de seleção de riscos acima.")
-        with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi", clear_on_submit=True):
                     epi_nome = st.text_input("Nome do EPI")
