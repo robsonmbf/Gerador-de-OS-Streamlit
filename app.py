@@ -229,21 +229,97 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
+# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MELHORADA ---
 def substituir_placeholders(doc, contexto):
+    """Substitui placeholders em parágrafos e tabelas, preservando melhor a formatação."""
+    # Processa parágrafos
+    for p in doc.paragraphs:
+        # Pula parágrafos vazios
+        if not p.text.strip():
+            continue
+            
+        # Junta o texto de todos os 'runs' para ter o texto completo do parágrafo
+        texto_completo_paragrafo = "".join(run.text for run in p.runs)
+        
+        for key, value in contexto.items():
+            if key in texto_completo_paragrafo:
+                # Armazena a formatação original do primeiro run do parágrafo
+                # para reaplicar nas partes que não são o valor do placeholder
+                primeiro_run = p.runs[0]
+                formato_original = {
+                    'bold': primeiro_run.bold,
+                    'italic': primeiro_run.italic,
+                    'underline': primeiro_run.underline,
+                    'font_name': primeiro_run.font.name,
+                    'font_size': primeiro_run.font.size
+                }
+
+                # Limpa o parágrafo
+                p.clear()
+
+                # Divide o texto em partes antes e depois do placeholder
+                partes = texto_completo_paragrafo.split(key)
+
+                for i, parte in enumerate(partes):
+                    # Adiciona a parte do texto antes/depois do placeholder com a formatação original
+                    run_parte = p.add_run(parte)
+                    run_parte.bold = formato_original['bold']
+                    run_parte.italic = formato_original['italic']
+                    run_parte.underline = formato_original['underline']
+                    if formato_original['font_name']:
+                        run_parte.font.name = formato_original['font_name']
+                    if formato_original['font_size']:
+                        run_parte.font.size = formato_original['font_size']
+                    
+                    # Adiciona o valor do placeholder (com formatação padrão), exceto para a última parte
+                    if i < len(partes) - 1:
+                        linhas_valor = str(value).split('\n')
+                        for j, linha in enumerate(linhas_valor):
+                            run_valor = p.add_run(linha)
+                            run_valor.bold = False
+                            run_valor.italic = False
+                            run_valor.underline = False
+                            run_valor.font.name = 'Segoe UI'
+                            run_valor.font.size = Pt(9)
+                            if j < len(linhas_valor) - 1:
+                                run_valor.add_break()
+                
+                # Atualiza o texto completo para a próxima iteração no mesmo parágrafo
+                texto_completo_paragrafo = "".join(run.text for run in p.runs)
+    # Processa tabelas da mesma forma
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
+                    if not p.text.strip():
+                        continue
+                    texto_completo_paragrafo = "".join(run.text for run in p.runs)
                     for key, value in contexto.items():
-                        if key in p.text:
-                            # Lógica de substituição mais simples para evitar conflitos de formatação
-                            # Esta lógica substitui o texto, mas pode não preservar formatação mista
-                            p.text = p.text.replace(key, str(value))
-
-    for p in doc.paragraphs:
-        for key, value in contexto.items():
-            if key in p.text:
-                p.text = p.text.replace(key, str(value))
+                        if key in texto_completo_paragrafo:
+                            primeiro_run = p.runs[0]
+                            formato_original = {
+                                'bold': primeiro_run.bold, 'italic': primeiro_run.italic, 'underline': primeiro_run.underline,
+                                'font_name': primeiro_run.font.name, 'font_size': primeiro_run.font.size
+                            }
+                            p.clear()
+                            partes = texto_completo_paragrafo.split(key)
+                            for i, parte in enumerate(partes):
+                                run_parte = p.add_run(parte)
+                                run_parte.bold = formato_original['bold']
+                                run_parte.italic = formato_original['italic']
+                                run_parte.underline = formato_original['underline']
+                                if formato_original['font_name']: run_parte.font.name = formato_original['font_name']
+                                if formato_original['font_size']: run_parte.font.size = formato_original['font_size']
+                                if i < len(partes) - 1:
+                                    linhas_valor = str(value).split('\n')
+                                    for j, linha in enumerate(linhas_valor):
+                                        run_valor = p.add_run(linha)
+                                        run_valor.bold = False; run_valor.italic = False; run_valor.underline = False
+                                        run_valor.font.name = 'Segoe UI'; run_valor.font.size = Pt(9)
+                                        if j < len(linhas_valor) - 1:
+                                            run_valor.add_break()
+                            texto_completo_paragrafo = "".join(run.text for run in p.runs)
+# --- FIM DA ALTERAÇÃO 1 ---
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -267,19 +343,22 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+        
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
+    
     medicoes_formatadas = []
-    max_len = 0
-    if medicoes_ordenadas:
-        max_len = max(len(med.get('agent', '')) for med in medicoes_ordenadas)
+    # --- INÍCIO DA ALTERAÇÃO 2: ALINHAMENTO CONSISTENTE DAS MEDIÇÕES ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
         epi = med.get('epi', '')
-        padding = ' ' * (max_len - len(agente))
+        
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        medicoes_formatadas.append(f"{agente}:{padding}\t{valor} {unidade}{epi_info}")
+        # Adiciona tabulação para um alinhamento consistente
+        medicoes_formatadas.append(f"{agente}:\t{valor} {unidade}{epi_info}")
+    # --- FIM DA ALTERAÇÃO 2 ---
+
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
@@ -288,9 +367,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
+    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
+
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
@@ -424,20 +505,24 @@ def main():
         
         st.divider()
 
-        # --- INÍCIO DA ALTERAÇÃO: LAYOUT DE 3 COLUNAS E SEÇÃO DE EPIs RESTAURADA ---
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
-                    agente_a_salvar = st.text_input("Agente/Fonte")
+                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
+                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
+                    agente_manual = st.text_input("...ou digite um novo aqui:")
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
                     epi_med = st.text_input("EPI Associado (Opcional)")
                     if st.form_submit_button("Adicionar Medição"):
-                        if agente_a_salvar and valor:
+                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
+                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
                             user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
                             st.session_state.user_data_loaded = False
                             st.rerun()
+                        else:
+                            st.warning("Por favor, preencha o Agente e o Valor.")
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições salvas:**")
                     for med in st.session_state.medicoes_adicionadas:
@@ -449,10 +534,7 @@ def main():
                             st.rerun()
         with col_exp2:
             with st.expander("➕ **Adicionar Risco Manual (Alternativo)**"):
-                 # Este expander está aqui caso você queira adicionar um risco manual fora da aba
-                 # A funcionalidade principal está na aba "➕ Manual"
                  st.info("Para adicionar riscos manuais, por favor, use a aba '➕ Manual' na seção de seleção de riscos acima.")
-
         with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi", clear_on_submit=True):
@@ -471,7 +553,6 @@ def main():
                             user_data_manager.remove_epi(user_id, epi['id'])
                             st.session_state.user_data_loaded = False
                             st.rerun()
-        # --- FIM DA ALTERAÇÃO ---
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
