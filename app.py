@@ -86,7 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False
+                        st.session_state.user_data_loaded = False 
                         st.success(message)
                         st.rerun()
                     else:
@@ -229,23 +229,32 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
+# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MELHORADA ---
 def substituir_placeholders(doc, contexto):
+    """
+    Substitui placeholders em parágrafos e tabelas, preservando a formatação
+    do texto que não é o placeholder.
+    """
+    elementos = list(doc.paragraphs)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                for p in cell.paragraphs:
-                    if not p.text.strip(): continue
-                    texto_completo_paragrafo = "".join(run.text for run in p.runs)
-                    for key, value in contexto.items():
-                        if key in texto_completo_paragrafo:
-                            p.text = p.text.replace(key, str(value))
-    for p in doc.paragraphs:
-        if not p.text.strip(): continue
-        texto_completo_paragrafo = "".join(run.text for run in p.runs)
-        for key, value in contexto.items():
-            if key in texto_completo_paragrafo:
-                p.text = p.text.replace(key, str(value))
-
+                elementos.extend(cell.paragraphs)
+    
+    for p in elementos:
+        # Percorre todos os 'runs' (trechos de texto com a mesma formatação) do parágrafo
+        for run in p.runs:
+            for key, value in contexto.items():
+                if key in run.text:
+                    # Substitui o texto dentro do run
+                    run.text = run.text.replace(key, str(value))
+                    # Aplica a formatação padrão ao texto inserido
+                    run.font.name = 'Segoe UI'
+                    run.font.size = Pt(9)
+                    run.bold = False
+                    run.italic = False
+                    run.underline = False
+# --- FIM DA ALTERAÇÃO 1 ---
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -273,7 +282,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     
     medicoes_formatadas = []
-    # --- INÍCIO DA ALTERAÇÃO: REMOÇÃO DO ALINHAMENTO ---
+    # --- INÍCIO DA ALTERAÇÃO 2: REMOÇÃO DO ESPAÇAMENTO EXTRA ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
@@ -281,11 +290,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         epi = med.get('epi', '')
         
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        # Formato simples, sem tabulação ou espaços extras
+        # Formato simples para garantir que não haja espaços extras
         medicoes_formatadas.append(f"{agente}: {valor} {unidade}{epi_info}")
-    # --- FIM DA ALTERAÇÃO ---
-
+    # --- FIM DA ALTERAÇÃO 2 ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
+    
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
