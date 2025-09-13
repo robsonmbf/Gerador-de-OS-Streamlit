@@ -149,10 +149,8 @@ def init_user_session_state():
         st.session_state.epis_adicionados = []
     if 'riscos_manuais_adicionados' not in st.session_state:
         st.session_state.riscos_manuais_adicionados = []
-    # --- NOVO: Inicializa a lista de cargos concluídos ---
     if 'cargos_concluidos' not in st.session_state:
         st.session_state.cargos_concluidos = set()
-
 
 def normalizar_texto(texto):
     if not isinstance(texto, str): return ""
@@ -259,6 +257,8 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
             danos = risco_row.get("possiveis_danos")
             if pd.notna(danos): danos_por_categoria[categoria].append(str(danos))
+    
+    # --- FUNCIONALIDADE JÁ EXISTENTE: INCLUSÃO DE RISCOS MANUAIS ---
     if riscos_manuais:
         map_categorias_rev = {v: k for k, v in CATEGORIAS_RISCO.items()}
         for risco_manual in riscos_manuais:
@@ -268,6 +268,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                 riscos_por_categoria[categoria_alvo].append(risco_manual.get('risco', ''))
                 if risco_manual.get('danos'):
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
+    
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agente'])
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
@@ -343,25 +344,18 @@ def main():
     with st.container(border=True):
         st.markdown('##### 👥 2. Selecione os Funcionários')
         
-        # --- ALTERAÇÃO 1: CONTAGEM DE FUNCIONÁRIOS E CHECK DE CONCLUSÃO ---
-        
-        # Filtro de Setor
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
         setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
         
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
         
-        # Mostra o quantitativo de funcionários após filtrar por setor
         st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
         
-        # Filtro de Função
         funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
         
-        # Adiciona a marcação de concluído
         funcoes_formatadas = []
-        if setor_sel: # A marcação só faz sentido se um ou mais setores estiverem selecionados
+        if setor_sel:
             for funcao in funcoes_disponiveis:
-                # Verifica cada combinação de setor selecionado com a função atual
                 concluido = all((s, funcao) in st.session_state.cargos_concluidos for s in setor_sel)
                 if concluido:
                     funcoes_formatadas.append(f"{funcao} ✅ Concluído")
@@ -372,15 +366,12 @@ def main():
 
         funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
         
-        # Remove a marcação para fazer o filtro no DataFrame
         funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
         
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         
-        # Mostra o quantitativo final
         st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
         st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
-        # --- FIM DA ALTERAÇÃO 1 ---
 
     with st.container(border=True):
         st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
@@ -453,7 +444,6 @@ def main():
         with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
             documentos_gerados = []
             
-            # --- ALTERAÇÃO 2: ATUALIZAR LISTA DE CARGOS CONCLUÍDOS ---
             combinacoes_processadas = set()
             for _, func in df_final_filtrado.iterrows():
                 combinacoes_processadas.add((func['setor'], func['funcao']))
@@ -465,7 +455,6 @@ def main():
                 documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
 
             st.session_state.cargos_concluidos.update(combinacoes_processadas)
-            # --- FIM DA ALTERAÇÃO 2 ---
 
             if documentos_gerados:
                 zip_buffer = BytesIO()
@@ -482,7 +471,6 @@ def main():
                     mime="application/zip",
                     use_container_width=True
                 )
-                # Força o rerender da página para atualizar a lista de funções com "✅ Concluído"
                 st.rerun()
 
 if __name__ == "__main__":
