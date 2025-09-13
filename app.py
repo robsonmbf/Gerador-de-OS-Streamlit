@@ -266,12 +266,22 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                 riscos_por_categoria[categoria_alvo].append(risco_manual.get('risco', ''))
                 if risco_manual.get('danos'):
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
+    
+    # --- INÍCIO DA ALTERAÇÃO 2: ORDENAR LISTA DE DANOS ---
+    # Ordena a lista de possíveis danos em cada categoria
+    for cat in danos_por_categoria:
+        danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+    # --- FIM DA ALTERAÇÃO 2 ---
+
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agente'])
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
-        epi_info = f" | EPI: {med['epi']}" if med.get("epi") else ""
+        # --- INÍCIO DA ALTERAÇÃO 1: CORREÇÃO DA FORMATAÇÃO DA MEDIÇÃO ---
+        epi_info = f" | EPI: {med['epi']}" if med.get("epi", "").strip() else ""
         medicoes_formatadas.append(f"{med['agente']}: {med['valor']} {med['unidade']}{epi_info}")
+        # --- FIM DA ALTERAÇÃO 1 ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
+    
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
@@ -279,9 +289,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
+    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
+
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
@@ -397,8 +409,15 @@ def main():
                         st.success(f"Risco '{risco_manual}' adicionado!")
             if st.session_state.riscos_manuais_adicionados:
                 st.write("**Riscos manuais adicionados:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    st.markdown(f"- **{r['risco']}** ({r['categoria']})")
+                for i in range(len(st.session_state.riscos_manuais_adicionados) - 1, -1, -1):
+                    r = st.session_state.riscos_manuais_adicionados[i]
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        st.markdown(f"- **{r['risco']}** ({r['categoria']})")
+                    with col2:
+                        if st.button("Remover", key=f"rem_risco_{i}"):
+                            st.session_state.riscos_manuais_adicionados.pop(i)
+                            st.rerun()
         
         st.divider()
 
@@ -420,8 +439,15 @@ def main():
                             st.rerun()
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições adicionadas:**")
-                    for med in st.session_state.medicoes_adicionadas:
-                        st.markdown(f"- {med['agente']}: {med['valor']} {med['unidade']}")
+                    for i in range(len(st.session_state.medicoes_adicionadas) - 1, -1, -1):
+                        med = st.session_state.medicoes_adicionadas[i]
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.markdown(f"- {med['agente']}: {med['valor']} {med['unidade']}")
+                        with col2:
+                            if st.button("Remover", key=f"rem_med_{i}"):
+                                st.session_state.medicoes_adicionadas.pop(i)
+                                st.rerun()
         with col_exp2:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi"):
@@ -432,8 +458,15 @@ def main():
                             st.rerun()
                 if st.session_state.epis_adicionados:
                     st.write("**EPIs adicionados:**")
-                    for epi_item in st.session_state.epis_adicionados:
-                        st.markdown(f"- {epi_item}")
+                    for i in range(len(st.session_state.epis_adicionados) - 1, -1, -1):
+                        epi_item = st.session_state.epis_adicionados[i]
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.markdown(f"- {epi_item}")
+                        with col2:
+                            if st.button("Remover", key=f"rem_epi_{i}"):
+                                st.session_state.epis_adicionados.pop(i)
+                                st.rerun()
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
@@ -468,10 +501,6 @@ def main():
                     mime="application/zip",
                     use_container_width=True
                 )
-                # --- INÍCIO DA CORREÇÃO ---
-                # Removendo o st.rerun() que impedia o botão de download de aparecer
-                # st.rerun() 
-                # --- FIM DA CORREÇÃO ---
 
 if __name__ == "__main__":
     main()
