@@ -52,11 +52,14 @@ st.markdown("""
         border-radius: 10px;
         background-color: #f9f9f9;
     }
+    /* --- CORREÇÃO DE ESTILO DA BARRA DE USUÁRIO --- */
     .user-info {
-        background-color: #e8f4fd;
+        background-color: #262730; /* Cor de fundo cinza escuro, combinando com o tema */
+        color: white;             /* Cor do texto para branco */
         padding: 1rem;
         border-radius: 5px;
         margin-bottom: 1rem;
+        border: 1px solid #3DD56D; /* Borda verde para destaque */
     }
     .activity-log {
         background-color: #f0f0f0;
@@ -253,7 +256,7 @@ def sync_manual_risk_to_db(risk):
             risk['danos'] if risk['danos'] else None
         )
 
-# --- LISTAS DE DADOS CONSTANTES (mantidas do código original) ---
+# --- LISTAS DE ДАНЫ CONSTANTES (mantidas do código original) ---
 UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
 AGENTES_DE_RISCO = sorted([
     "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
@@ -494,11 +497,8 @@ def main():
         return
     
     # Usuário autenticado - mostrar aplicação principal
-    # --- INÍCIO DA CORREÇÃO ---
-    # Garante que a barra de info do usuário só apareça se ele estiver logado
     if st.session_state.authenticated:
         show_user_info()
-    # --- FIM DA CORREÇÃO ---
     
     init_user_session_state()
     
