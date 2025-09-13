@@ -69,21 +69,6 @@ st.markdown("""
         margin-bottom: 1rem;
         border: 1px solid #3DD56D; 
     }
-    .risk-card {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 10px;
-        background-color: #f9f9f9;
-        transition: box-shadow 0.3s ease-in-out;
-    }
-    .risk-card:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .risk-description {
-        font-size: 0.9rem;
-        color: #666;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -382,15 +367,22 @@ def main():
             
             col1, col2 = st.columns(2)
             riscos_list = riscos_da_categoria.to_dict('records')
-            metade = len(riscos_list) // 2 + (len(riscos_list) % 2 > 0)
+            metade = len(riscos_list) // 2 + (len(riscos_list) % 2)
 
             for i, row in enumerate(riscos_list):
                 col = col1 if i < metade else col2
                 with col:
-                    st.markdown('<div class="risk-card">', unsafe_allow_html=True)
-                    selecionado = st.checkbox(f"**{row['risco']}**", key=f"risk_{row['risco']}", value=select_all_value)
-                    st.markdown(f"<div class='risk-description'>{row['possiveis_danos']}</div>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    # --- INÍCIO DA CORREÇÃO DO LAYOUT ---
+                    # Usa st.container com borda para criar o efeito de "cartão" no tema escuro
+                    with st.container(border=True):
+                        selecionado = st.checkbox(
+                            f"**{row['risco']}**", 
+                            key=f"risk_{row['risco']}", 
+                            value=select_all_value
+                        )
+                        st.markdown(f"<small>{row['possiveis_danos']}</small>", unsafe_allow_html=True)
+                    # --- FIM DA CORREÇÃO DO LAYOUT ---
+
                     if selecionado:
                         riscos_selecionados.append(row['risco'])
             st.divider()
