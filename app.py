@@ -234,27 +234,23 @@ def substituir_placeholders(doc, contexto):
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
-                    if not p.text.strip(): continue
-                    texto_completo_paragrafo = "".join(run.text for run in p.runs)
-                    for key, value in contexto.items():
-                        if key in texto_completo_paragrafo:
-                            novo_texto = texto_completo_paragrafo.replace(key, str(value))
-                            p.clear()
-                            run = p.add_run(novo_texto)
-                            run.font.name = 'Segoe UI'
-                            run.font.size = Pt(9)
-                            texto_completo_paragrafo = novo_texto
+                    # Usando uma abordagem mais simples e direta
+                    inline = p.runs
+                    # Substitui o texto preservando a formatação do primeiro run
+                    for i in range(len(inline)):
+                        for key, value in contexto.items():
+                            if key in inline[i].text:
+                                text = inline[i].text.replace(key, str(value))
+                                inline[i].text = text
     for p in doc.paragraphs:
-        if not p.text.strip(): continue
-        texto_completo_paragrafo = "".join(run.text for run in p.runs)
-        for key, value in contexto.items():
-            if key in texto_completo_paragrafo:
-                novo_texto = texto_completo_paragrafo.replace(key, str(value))
-                p.clear()
-                run = p.add_run(novo_texto)
-                run.font.name = 'Segoe UI'
-                run.font.size = Pt(9)
-                texto_completo_paragrafo = novo_texto
+        # Mesma lógica para parágrafos fora de tabelas
+        inline = p.runs
+        for i in range(len(inline)):
+            for key, value in contexto.items():
+                if key in inline[i].text:
+                    text = inline[i].text.replace(key, str(value))
+                    inline[i].text = text
+
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -278,16 +274,23 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+        
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
+    
     medicoes_formatadas = []
+    # --- INÍCIO DA ALTERAÇÃO: REMOÇÃO DO ALINHAMENTO ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
         epi = med.get('epi', '')
+        
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
+        # Formato simples, sem tabulação ou espaços extras
         medicoes_formatadas.append(f"{agente}: {valor} {unidade}{epi_info}")
+    # --- FIM DA ALTERAÇÃO ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
+    
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
@@ -295,9 +298,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
+    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
+
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
@@ -431,7 +436,7 @@ def main():
         
         st.divider()
 
-        col_exp1, col_exp2, col_exp3 = st.columns(3)
+        col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
@@ -459,9 +464,6 @@ def main():
                             st.session_state.user_data_loaded = False
                             st.rerun()
         with col_exp2:
-            with st.expander("➕ **Adicionar Risco Manual (Alternativo)**"):
-                 st.info("Para adicionar riscos manuais, por favor, use a aba '➕ Manual' na seção de seleção de riscos acima.")
-        with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi", clear_on_submit=True):
                     epi_nome = st.text_input("Nome do EPI")
@@ -502,7 +504,6 @@ def main():
                 nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
                 caminho_no_zip = f"{func.get('setor', 'SemSetor')}/{func.get('funcao', 'SemFuncao')}/OS_{nome_limpo}.docx"
                 documentos_gerados.append((caminho_no_zip, doc_io.getvalue()))
-
             st.session_state.cargos_concluidos.update(combinacoes_processadas)
             if documentos_gerados:
                 zip_buffer = BytesIO()
