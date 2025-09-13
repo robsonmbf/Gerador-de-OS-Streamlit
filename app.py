@@ -201,7 +201,6 @@ def carregar_planilha(arquivo):
 
 @st.cache_data
 def obter_dados_pgr():
-    # ... (os dados do PGR permanecem os mesmos)
     data = [
         {'categoria': 'fisico', 'risco': 'Ruído (Contínuo ou Intermitente)', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'},
         {'categoria': 'fisico', 'risco': 'Ruído (Impacto)', 'possiveis_danos': 'Perda auditiva, trauma acústico.'},
@@ -237,31 +236,31 @@ def substituir_placeholders_com_logica_medicoes(doc, contexto):
     Substitui placeholders em um documento Word, com lógica especial para
     a chave '[MEDIÇÕES]' para evitar problemas de espaçamento.
     """
+    # Processa placeholders em tabelas
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                # Copia a lista de parágrafos para iterar com segurança
+                # Itera sobre uma cópia da lista de parágrafos para modificá-la com segurança
                 for p in list(cell.paragraphs):
                     # Lógica especial para o placeholder de medições
                     if '[MEDIÇÕES]' in p.text:
                         valor_medicoes = contexto.get('[MEDIÇÕES]')
-                        p.text = "" # Limpa o parágrafo do placeholder
+                        p.text = ""  # Limpa o parágrafo do placeholder
 
                         if isinstance(valor_medicoes, list) and valor_medicoes:
                             for i, linha_medicao in enumerate(valor_medicoes):
-                                # Usa o parágrafo existente para a primeira linha
+                                # Usa o parágrafo existente para a primeira linha, cria novos para as demais
                                 par_atual = p if i == 0 else cell.add_paragraph()
                                 run = par_atual.add_run(linha_medicao)
                                 run.font.name = 'Segoe UI'
                                 run.font.size = Pt(9)
                                 par_atual.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                        else: # Se for string (ex: "Não aplicável")
+                        else:  # Se for uma string (ex: "Não aplicável")
                             run = p.add_run(str(valor_medicoes))
                             run.font.name = 'Segoe UI'
                             run.font.size = Pt(9)
                     
                     # Lógica normal para outros placeholders
-                    # O `try` evita erros se o parágrafo for removido ou alterado
                     try:
                         inline_text = "".join(run.text for run in p.runs)
                         for key, value in contexto.items():
@@ -271,11 +270,11 @@ def substituir_placeholders_com_logica_medicoes(doc, contexto):
                                 run = p.add_run(new_text)
                                 run.font.name = 'Segoe UI'
                                 run.font.size = Pt(9)
-                                inline_text = new_text # Atualiza para a próxima iteração
+                                inline_text = new_text  # Atualiza para a próxima iteração
                     except Exception:
                         continue
 
-    # Lógica para parágrafos fora de tabelas
+    # Processa placeholders em parágrafos fora de tabelas
     for p in doc.paragraphs:
         inline_text = "".join(run.text for run in p.runs)
         for key, value in contexto.items():
@@ -291,7 +290,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+    danos_por_categoria = {cat: [] for cat in CATEGORias_RISCO.keys()}
     for _, risco_row in riscos_info.iterrows():
         categoria = str(risco_row.get("categoria", "")).lower()
         if categoria in riscos_por_categoria:
@@ -428,5 +427,4 @@ def main():
             with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
                 riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
                 for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
-                    if not
+                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome
