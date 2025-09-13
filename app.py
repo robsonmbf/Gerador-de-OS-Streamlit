@@ -86,6 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
+                        st.success(message)
                         st.rerun()
                     else:
                         st.error(message)
@@ -339,12 +340,34 @@ def main():
 
     with st.container(border=True):
         st.markdown('##### 👥 2. Selecione os Funcionários')
+        
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
         setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
+        
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        funcoes = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
-        funcao_sel = st.multiselect("Filtrar por Função/Cargo(s)", funcoes)
+        
+        st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
+        
+        funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
+        
+        funcoes_formatadas = []
+        if setor_sel:
+            for funcao in funcoes_disponiveis:
+                concluido = all((s, funcao) in st.session_state.cargos_concluidos for s in setor_sel)
+                if concluido:
+                    funcoes_formatadas.append(f"{funcao} ✅ Concluído")
+                else:
+                    funcoes_formatadas.append(funcao)
+        else:
+            funcoes_formatadas = funcoes_disponiveis
+
+        funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
+        
+        funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
+        
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
+        
+        st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
         st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
 
     with st.container(border=True):
@@ -352,72 +375,54 @@ def main():
         st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
         
         riscos_selecionados = []
-        if 'selecionar_todos' not in st.session_state:
-            st.session_state.selecionar_todos = {}
+        
+        nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
+        tabs = st.tabs(nomes_abas)
 
-        for categoria_key, categoria_nome in CATEGORIAS_RISCO.items():
-            st.subheader(categoria_nome)
-            riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]
-            
-            if st.button(f"Selecionar/Limpar Todos - {categoria_nome.split(' ')[1]}", key=f"select_all_{categoria_key}"):
-                current_state = st.session_state.selecionar_todos.get(categoria_key, False)
-                st.session_state.selecionar_todos[categoria_key] = not current_state
-                st.rerun()
+        for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
+            with tabs[i]:
+                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
+                selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
+                riscos_selecionados.extend(selecionados)
 
-            select_all_value = st.session_state.selecionar_todos.get(categoria_key, False)
-            
-            col1, col2 = st.columns(2)
-            riscos_list = riscos_da_categoria.to_dict('records')
-            metade = len(riscos_list) // 2 + (len(riscos_list) % 2)
+        with tabs[-1]:
+            st.markdown("###### Adicionar um Risco que não está na lista")
+            with st.form("form_risco_manual", clear_on_submit=True):
+                risco_manual = st.text_input("Descrição do Risco")
+                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
+                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
+                if st.form_submit_button("Adicionar Risco Manual"):
+                    if risco_manual and categoria_manual:
+                        st.session_state.riscos_manuais_adicionados.append({"risco": risco_manual, "categoria": categoria_manual, "danos": danos_manuais})
+                        st.success(f"Risco '{risco_manual}' adicionado!")
+            if st.session_state.riscos_manuais_adicionados:
+                st.write("**Riscos manuais adicionados:**")
+                for r in st.session_state.riscos_manuais_adicionados:
+                    st.markdown(f"- **{r['risco']}** ({r['categoria']})")
+        
+        st.divider()
 
-            for i, row in enumerate(riscos_list):
-                col = col1 if i < metade else col2
-                with col:
-                    with st.container(border=True):
-                        selecionado = st.checkbox(
-                            f"**{row['risco']}**", 
-                            key=f"risk_{row['risco']}", 
-                            value=select_all_value
-                        )
-                        st.markdown(f"<small style='color: grey;'>{row['possiveis_danos']}</small>", unsafe_allow_html=True)
-                        if selecionado:
-                            riscos_selecionados.append(row['risco'])
-            st.divider()
-
-        # --- SEÇÃO DE FUNCIONALIDADES ADICIONAIS RESTAURADA ---
-        col_exp1, col_exp2, col_exp3 = st.columns(3)
+        col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao"):
-                    agente = st.selectbox("Agente/Fonte", AGENTES_DE_RISCO)
+                    opcoes_agente = AGENTES_DE_RISCO + ["Outro (digitar manualmente)"]
+                    agente_selecionado = st.selectbox("Agente/Fonte", opcoes_agente)
+                    agente_final = agente_selecionado
+                    if agente_selecionado == "Outro (digitar manualmente)":
+                        agente_final = st.text_input("Digite o nome do Agente:")
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
-                    epi_med = st.text_input("EPI Associado")
+                    epi_med = st.text_input("EPI Associado (Opcional)")
                     if st.form_submit_button("Adicionar Medição"):
-                        if agente and valor:
-                            st.session_state.medicoes_adicionadas.append({"agente": agente, "valor": valor, "unidade": unidade, "epi": epi_med})
+                        if agente_final and valor:
+                            st.session_state.medicoes_adicionadas.append({"agente": agente_final, "valor": valor, "unidade": unidade, "epi": epi_med})
                             st.rerun()
                 if st.session_state.medicoes_adicionadas:
-                    st.write("**Adicionadas:**")
+                    st.write("**Medições adicionadas:**")
                     for med in st.session_state.medicoes_adicionadas:
                         st.markdown(f"- {med['agente']}: {med['valor']} {med['unidade']}")
-
         with col_exp2:
-            with st.expander("➕ **Adicionar Risco Manual**"):
-                 with st.form("form_risco_manual"):
-                    risco = st.text_input("Descrição do Risco")
-                    categoria = st.selectbox("Categoria", list(CATEGORIAS_RISCO.values()))
-                    danos = st.text_area("Possíveis Danos")
-                    if st.form_submit_button("Adicionar Risco"):
-                        if risco and categoria:
-                            st.session_state.riscos_manuais_adicionados.append({"risco": risco, "categoria": categoria, "danos": danos})
-                            st.rerun()
-                 if st.session_state.riscos_manuais_adicionados:
-                    st.write("**Adicionados:**")
-                    for r in st.session_state.riscos_manuais_adicionados:
-                        st.markdown(f"- **{r['risco']}** ({r['categoria']})")
-
-        with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi"):
                     epi_nome = st.text_input("Nome do EPI")
@@ -426,23 +431,27 @@ def main():
                             st.session_state.epis_adicionados.append(epi_nome)
                             st.rerun()
                 if st.session_state.epis_adicionados:
-                    st.write("**Adicionados:**")
+                    st.write("**EPIs adicionados:**")
                     for epi_item in st.session_state.epis_adicionados:
                         st.markdown(f"- {epi_item}")
-        # --- FIM DA SEÇÃO RESTAURADA ---
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
         epis_finais = ", ".join(st.session_state.epis_adicionados)
         with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
             documentos_gerados = []
+            
+            combinacoes_processadas = set()
             for _, func in df_final_filtrado.iterrows():
+                combinacoes_processadas.add((func['setor'], func['funcao']))
                 doc = gerar_os(func, df_pgr, riscos_selecionados, epis_finais, st.session_state.medicoes_adicionadas, st.session_state.riscos_manuais_adicionados, arquivo_modelo_os)
                 doc_io = BytesIO()
                 doc.save(doc_io)
                 doc_io.seek(0)
                 nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
                 documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
+
+            st.session_state.cargos_concluidos.update(combinacoes_processadas)
 
             if documentos_gerados:
                 zip_buffer = BytesIO()
@@ -459,6 +468,10 @@ def main():
                     mime="application/zip",
                     use_container_width=True
                 )
+                # --- INÍCIO DA CORREÇÃO ---
+                # Removendo o st.rerun() que impedia o botão de download de aparecer
+                # st.rerun() 
+                # --- FIM DA CORREÇÃO ---
 
 if __name__ == "__main__":
     main()
