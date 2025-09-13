@@ -256,6 +256,7 @@ def substituir_placeholders(doc, contexto):
                                 run_valor.add_break()
                 full_text = "".join(run.text for run in p.runs)
 
+# --- INÍCIO DA CORREÇÃO ---
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
@@ -278,11 +279,21 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
-    medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agent'])
+        
+    # Usa a chave 'agent' (inglês), que é como vem do banco de dados
+    medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
+    
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
-        epi_info = f" | EPI: {med['epi']}" if med.get("epi", "").strip() else ""
-        medicoes_formatadas.append(f"{med['agent']}: \t{med['value']} {med['unit']}{epi_info}")
+        # Usa .get() para acessar as chaves de forma segura, evitando erros
+        agente = med.get('agent', 'N/A')
+        valor = med.get('value', 'N/A')
+        unidade = med.get('unit', '')
+        epi = med.get('epi', '')
+        
+        epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
+        medicoes_formatadas.append(f"{agente}: \t{valor} {unidade}{epi_info}")
+        
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
@@ -317,6 +328,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     }
     substituir_placeholders(doc, contexto)
     return doc
+# --- FIM DA CORREÇÃO ---
 
 # --- APLICAÇÃO PRINCIPAL ---
 def main():
@@ -406,7 +418,6 @@ def main():
                         st.session_state.user_data_loaded = False
                         st.rerun()
         
-        # --- FUNCIONALIDADE DE RESUMO RESTAURADA ---
         total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
         if total_riscos > 0:
             with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
