@@ -290,7 +290,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-    danos_por_categoria = {cat: [] for cat in CATEGORias_RISCO.keys()}
+    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
     for _, risco_row in riscos_info.iterrows():
         categoria = str(risco_row.get("categoria", "")).lower()
         if categoria in riscos_por_categoria:
@@ -405,26 +405,4 @@ def main():
             with st.form("form_risco_manual", clear_on_submit=True):
                 st.markdown("###### Adicionar um Risco que não está na lista")
                 risco_manual_nome = st.text_input("Descrição do Risco")
-                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
-                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
-                if st.form_submit_button("Adicionar Risco Manual"):
-                    if risco_manual_nome and categoria_manual:
-                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-            if st.session_state.riscos_manuais_adicionados:
-                st.write("**Riscos manuais salvos:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    col1, col2 = st.columns([4, 1])
-                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
-                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
-                        user_data_manager.remove_manual_risk(user_id, r['id'])
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-        
-        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
-        if total_riscos > 0:
-            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome
+                
