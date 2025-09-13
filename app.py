@@ -87,7 +87,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE AUTENTICAÇÃO ---
+# --- FUNÇÕES DE AUTENTICAÇÃO E LÓGICA DE NEGÓCIO ---
 def show_login_page():
     st.markdown("""<div class="main-header"><h1>🔐 Acesso ao Sistema</h1><p>Faça login ou registre-se para acessar o Gerador de OS</p></div>""", unsafe_allow_html=True)
     tab1, tab2 = st.tabs(["Login", "Registro"])
@@ -165,7 +165,6 @@ def init_user_session_state():
     if 'riscos_manuais_adicionados' not in st.session_state:
         st.session_state.riscos_manuais_adicionados = []
 
-# --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
 def normalizar_texto(texto):
     if not isinstance(texto, str): return ""
     return re.sub(r'[\s\W_]+', '', texto.lower().strip())
@@ -356,12 +355,9 @@ def main():
         st.markdown('##### 👥 2. Selecione os Funcionários')
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
         setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
-        
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        
         funcoes = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
         funcao_sel = st.multiselect("Filtrar por Função/Cargo(s)", funcoes)
-        
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
 
@@ -380,28 +376,98 @@ def main():
             if st.button(f"Selecionar/Limpar Todos - {categoria_nome.split(' ')[1]}", key=f"select_all_{categoria_key}"):
                 current_state = st.session_state.selecionar_todos.get(categoria_key, False)
                 st.session_state.selecionar_todos[categoria_key] = not current_state
+                st.rerun()
 
             select_all_value = st.session_state.selecionar_todos.get(categoria_key, False)
             
             col1, col2 = st.columns(2)
             riscos_list = riscos_da_categoria.to_dict('records')
-            metade = len(riscos_list) // 2
+            metade = len(riscos_list) // 2 + (len(riscos_list) % 2 > 0)
 
             for i, row in enumerate(riscos_list):
                 col = col1 if i < metade else col2
                 with col:
+                    st.markdown('<div class="risk-card">', unsafe_allow_html=True)
                     selecionado = st.checkbox(f"**{row['risco']}**", key=f"risk_{row['risco']}", value=select_all_value)
                     st.markdown(f"<div class='risk-description'>{row['possiveis_danos']}</div>", unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                     if selecionado:
                         riscos_selecionados.append(row['risco'])
             st.divider()
 
         col_exp1, col_exp2, col_exp3 = st.columns(3)
-        # ... (expanders para Medições, Riscos Manuais, EPIs)
+        with col_exp1:
+            with st.expander("📊 **Adicionar Medições**"):
+                with st.form("form_medicao"):
+                    agente = st.selectbox("Agente/Fonte", AGENTES_DE_RISCO)
+                    valor = st.text_input("Valor Medido")
+                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
+                    epi_med = st.text_input("EPI Associado")
+                    if st.form_submit_button("Adicionar Medição"):
+                        if agente and valor:
+                            st.session_state.medicoes_adicionadas.append({"agente": agente, "valor": valor, "unidade": unidade, "epi": epi_med})
+                            st.rerun()
+                if st.session_state.medicoes_adicionadas:
+                    st.write("**Adicionadas:**")
+                    for med in st.session_state.medicoes_adicionadas:
+                        st.markdown(f"- {med['agente']}: {med['valor']} {med['unidade']}")
 
+        with col_exp2:
+            with st.expander("➕ **Adicionar Risco Manual**"):
+                 with st.form("form_risco_manual"):
+                    risco = st.text_input("Descrição do Risco")
+                    categoria = st.selectbox("Categoria", list(CATEGORIAS_RISCO.values()))
+                    danos = st.text_area("Possíveis Danos")
+                    if st.form_submit_button("Adicionar Risco"):
+                        if risco and categoria:
+                            st.session_state.riscos_manuais_adicionados.append({"risco": risco, "categoria": categoria, "danos": danos})
+                            st.rerun()
+                 if st.session_state.riscos_manuais_adicionados:
+                    st.write("**Adicionados:**")
+                    for r in st.session_state.riscos_manuais_adicionados:
+                        st.markdown(f"- **{r['risco']}** ({r['categoria']})")
+
+        with col_exp3:
+            with st.expander("🦺 **Adicionar EPIs Gerais**"):
+                with st.form("form_epi"):
+                    epi_nome = st.text_input("Nome do EPI")
+                    if st.form_submit_button("Adicionar EPI"):
+                        if epi_nome:
+                            st.session_state.epis_adicionados.append(epi_nome)
+                            st.rerun()
+                if st.session_state.epis_adicionados:
+                    st.write("**Adicionados:**")
+                    for epi_item in st.session_state.epis_adicionados:
+                        st.markdown(f"- {epi_item}")
+
+    st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
-        # ... (lógica de geração do ZIP)
-        pass
+        epis_finais = ", ".join(st.session_state.epis_adicionados)
+        with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
+            documentos_gerados = []
+            for _, func in df_final_filtrado.iterrows():
+                doc = gerar_os(func, df_pgr, riscos_selecionados, epis_finais, st.session_state.medicoes_adicionadas, st.session_state.riscos_manuais_adicionados, arquivo_modelo_os)
+                doc_io = BytesIO()
+                doc.save(doc_io)
+                doc_io.seek(0)
+                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
+                documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
+
+            if documentos_gerados:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for nome_arquivo, conteudo_doc in documentos_gerados:
+                        zip_file.writestr(nome_arquivo, conteudo_doc)
+                
+                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
+                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
+                st.download_button(
+                    label="📥 Baixar Todas as OS (.zip)", 
+                    data=zip_buffer.getvalue(), 
+                    file_name=nome_arquivo_zip, 
+                    mime="application/zip",
+                    use_container_width=True
+                )
 
 if __name__ == "__main__":
     main()
