@@ -387,7 +387,6 @@ def main():
                 riscos_selecionados.extend(selecionados)
         with tabs[-1]:
             st.markdown("###### Adicionar um Risco que não está na lista")
-            # --- INÍCIO DA ALTERAÇÃO: ADIÇÃO DE clear_on_submit=True ---
             with st.form("form_risco_manual", clear_on_submit=True):
                 risco_manual_nome = st.text_input("Descrição do Risco")
                 categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
@@ -413,15 +412,26 @@ def main():
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
-                    agente_a_salvar = st.text_input("Agente/Fonte")
+                    # --- INÍCIO DA ALTERAÇÃO: CAMPO DE AGENTE HÍBRIDO ---
+                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
+                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
+                    agente_manual = st.text_input("...ou digite um novo aqui:")
+                    
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
                     epi_med = st.text_input("EPI Associado (Opcional)")
+                    
                     if st.form_submit_button("Adicionar Medição"):
-                        if agente_a_salvar and valor:
+                        # Prioriza o campo de texto, se preenchido. Senão, usa a seleção.
+                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
+                        
+                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
                             user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
                             st.session_state.user_data_loaded = False
                             st.rerun()
+                        else:
+                            st.warning("Por favor, preencha o Agente e o Valor.")
+                    # --- FIM DA ALTERAÇÃO ---
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições salvas:**")
                     for med in st.session_state.medicoes_adicionadas:
@@ -449,7 +459,6 @@ def main():
                             user_data_manager.remove_epi(user_id, epi['id'])
                             st.session_state.user_data_loaded = False
                             st.rerun()
-            # --- FIM DA ALTERAÇÃO ---
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
