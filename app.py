@@ -234,17 +234,31 @@ def substituir_placeholders(doc, contexto):
                 p.style = style
                 parts = full_text.split(key)
                 for i, part in enumerate(parts):
-                    p.add_run(part)
+                    # Adiciona a parte do texto antes/depois do placeholder, mantendo a formatação original do parágrafo
+                    run_part = p.add_run(part)
+                    if p.runs and p.runs[0].font:
+                        run_part.font.name = p.runs[0].font.name
+                        run_part.font.size = p.runs[0].font.size
+                        run_part.bold = p.runs[0].bold
+                        run_part.italic = p.runs[0].italic
+                        run_part.underline = p.runs[0].underline
+                    
                     if i < len(parts) - 1:
                         value_lines = str(value).split('\n')
                         for j, line in enumerate(value_lines):
+                            # --- INÍCIO DA ALTERAÇÃO 1: GARANTIR FONTE E TAMANHO ---
                             run_valor = p.add_run(line)
                             run_valor.bold = False
+                            run_valor.italic = False
+                            run_valor.underline = False
                             run_valor.font.name = 'Segoe UI'
                             run_valor.font.size = Pt(9)
+                            # --- FIM DA ALTERAÇÃO 1 ---
                             if j < len(value_lines) - 1:
                                 run_valor.add_break()
+
                 full_text = "".join(run.text for run in p.runs)
+
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -268,12 +282,16 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+        
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agente'])
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
         epi_info = f" | EPI: {med['epi']}" if med.get("epi", "").strip() else ""
-        medicoes_formatadas.append(f"{med['agente']}: {med['valor']} {med['unidade']}{epi_info}")
+        # --- INÍCIO DA ALTERAÇÃO 2: ADICIONAR TABULAÇÃO PARA ALINHAMENTO ---
+        medicoes_formatadas.append(f"{med['agente']}:\t{med['valor']} {med['unidade']}{epi_info}")
+        # --- FIM DA ALTERAÇÃO 2 ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
+    
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
@@ -281,9 +299,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
+    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
+
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
@@ -396,33 +416,25 @@ def main():
                             st.session_state.riscos_manuais_adicionados.pop(i)
                             st.rerun()
         
-        # --- INÍCIO DA NOVA FUNCIONALIDADE: RESUMO DOS RISCOS ---
         total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
         if total_riscos > 0:
             with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                # Organiza os riscos por categoria para exibição
                 riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                
-                # Adiciona os riscos selecionados do PGR
                 for risco_nome in riscos_selecionados:
-                    # Encontra a categoria do risco no DataFrame do PGR
-                    categoria_key = df_pgr[df_pgr['risco'] == risco_nome]['categoria'].iloc[0]
-                    categoria_display = CATEGORIAS_RISCO.get(categoria_key)
-                    if categoria_display:
-                        riscos_para_exibir[categoria_display].append(risco_nome)
-                
-                # Adiciona os riscos manuais
+                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                    if not categoria_key_series.empty:
+                        categoria_key = categoria_key_series.iloc[0]
+                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
+                        if categoria_display:
+                            riscos_para_exibir[categoria_display].append(risco_nome)
                 for risco_manual in st.session_state.riscos_manuais_adicionados:
                     riscos_para_exibir[risco_manual['categoria']].append(risco_manual['risco'])
-
-                # Exibe as categorias que têm riscos
                 for categoria, lista_riscos in riscos_para_exibir.items():
                     if lista_riscos:
                         st.markdown(f"**{categoria}**")
                         for risco in sorted(list(set(lista_riscos))):
                             st.markdown(f"- {risco}")
-        # --- FIM DA NOVA FUNCIONALIDADE ---
-
+        
         st.divider()
 
         col_exp1, col_exp2 = st.columns(2)
@@ -431,15 +443,16 @@ def main():
                 with st.form("form_medicao"):
                     opcoes_agente = AGENTES_DE_RISCO + ["Outro (digitar manualmente)"]
                     agente_selecionado = st.selectbox("Agente/Fonte", opcoes_agente)
-                    agente_final = agente_selecionado
+                    agente_manual_input = ""
                     if agente_selecionado == "Outro (digitar manualmente)":
-                        agente_final = st.text_input("Digite o nome do Agente:")
+                        agente_manual_input = st.text_input("Digite o nome do Agente:")
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
                     epi_med = st.text_input("EPI Associado (Opcional)")
                     if st.form_submit_button("Adicionar Medição"):
-                        if agente_final and valor:
-                            st.session_state.medicoes_adicionadas.append({"agente": agente_final, "valor": valor, "unidade": unidade, "epi": epi_med})
+                        agente_a_salvar = agente_manual_input if agente_selecionado == "Outro (digitar manualmente)" else agente_selecionado
+                        if agente_a_salvar and valor:
+                            st.session_state.medicoes_adicionadas.append({"agente": agente_a_salvar, "valor": valor, "unidade": unidade, "epi": epi_med})
                             st.rerun()
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições adicionadas:**")
