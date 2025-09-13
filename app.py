@@ -23,6 +23,19 @@ st.set_page_config(
     layout="wide",
 )
 
+# --- INÍCIO DA CORREÇÃO: DEFINIÇÃO DE CONSTANTES GLOBAIS ---
+# Movendo estas listas para o escopo global para que fiquem acessíveis em todo o app
+UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
+AGENTES_DE_RISCO = sorted([
+    "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
+    "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
+    "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias", 
+    "Protozoários", "Fungos", "Parasitas", "Bacilos"
+])
+CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
+# --- FIM DA CORREÇÃO ---
+
+
 # --- Inicialização dos Gerenciadores ---
 @st.cache_resource
 def init_managers():
@@ -348,7 +361,6 @@ def main():
     df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
     df_pgr = obter_dados_pgr()
 
-    # --- INÍCIO DA INTERFACE RESTANTE ---
     with st.container(border=True):
         st.markdown('##### 👥 2. Selecione os Funcionários')
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
@@ -370,7 +382,6 @@ def main():
 
         st.markdown("**Riscos Identificados (PGR)**")
         riscos_selecionados = []
-        CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
         tabs = st.tabs(list(CATEGORIAS_RISCO.values()))
         for i, (key, nome) in enumerate(CATEGORIAS_RISCO.items()):
             with tabs[i]:
@@ -451,7 +462,6 @@ def main():
                     mime="application/zip",
                     use_container_width=True
                 )
-    # --- FIM DA INTERFACE RESTANTE ---
 
 if __name__ == "__main__":
     main()
