@@ -86,7 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False
+                        st.session_state.user_data_loaded = False 
                         st.success(message)
                         st.rerun()
                     else:
@@ -386,8 +386,8 @@ def main():
                 selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
                 riscos_selecionados.extend(selecionados)
         with tabs[-1]:
-            st.markdown("###### Adicionar um Risco que não está na lista")
             with st.form("form_risco_manual", clear_on_submit=True):
+                st.markdown("###### Adicionar um Risco que não está na lista")
                 risco_manual_nome = st.text_input("Descrição do Risco")
                 categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
                 danos_manuais = st.text_area("Possíveis Danos (Opcional)")
@@ -406,32 +406,46 @@ def main():
                         st.session_state.user_data_loaded = False
                         st.rerun()
         
+        # --- FUNCIONALIDADE DE RESUMO RESTAURADA ---
+        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
+        if total_riscos > 0:
+            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
+                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
+                for risco_nome in riscos_selecionados:
+                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                    if not categoria_key_series.empty:
+                        categoria_key = categoria_key_series.iloc[0]
+                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
+                        if categoria_display:
+                            riscos_para_exibir[categoria_display].append(risco_nome)
+                for risco_manual in st.session_state.riscos_manuais_adicionados:
+                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
+                for categoria, lista_riscos in riscos_para_exibir.items():
+                    if lista_riscos:
+                        st.markdown(f"**{categoria}**")
+                        for risco in sorted(list(set(lista_riscos))):
+                            st.markdown(f"- {risco}")
+        
         st.divider()
 
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
-                    # --- INÍCIO DA ALTERAÇÃO: CAMPO DE AGENTE HÍBRIDO ---
                     opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
                     agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
                     agente_manual = st.text_input("...ou digite um novo aqui:")
-                    
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
                     epi_med = st.text_input("EPI Associado (Opcional)")
-                    
                     if st.form_submit_button("Adicionar Medição"):
-                        # Prioriza o campo de texto, se preenchido. Senão, usa a seleção.
                         agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
-                        
                         if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
                             user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
                             st.session_state.user_data_loaded = False
                             st.rerun()
                         else:
                             st.warning("Por favor, preencha o Agente e o Valor.")
-                    # --- FIM DA ALTERAÇÃO ---
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições salvas:**")
                     for med in st.session_state.medicoes_adicionadas:
