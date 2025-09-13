@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from docx import Document
 from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import zipfile
 from io import BytesIO
 import time
@@ -10,11 +11,41 @@ import sys
 import os
 
 # Adicionar o diretório atual ao path para importar módulos locais
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# (Se database for um módulo local, esta linha é necessária)
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from database.models import DatabaseManager
-from database.auth import AuthManager
-from database.user_data import UserDataManager
+# --- MOCKUP PARA TESTE SEM BANCO DE DADOS ---
+# Se você estiver rodando sem o banco de dados, descomente as classes abaixo
+# para simular o comportamento e evitar erros.
+
+class MockDBManager:
+    def get_connection(self): return None
+class MockAuthManager:
+    def __init__(self, db_manager): pass
+    def login_user(self, email, password): return True, "Login bem-sucedido!", {'user_id': 'test_user', 'email': email, 'session_token': 'fake_token'}
+    def register_user(self, email, password): return True, "Registro bem-sucedido!"
+    def validate_session(self, token): return True, "Sessão válida"
+    def logout_user(self, token): pass
+class MockUserDataManager:
+    def __init__(self, db_manager):
+        if 'mock_data' not in st.session_state:
+            st.session_state.mock_data = {
+                'measurements': [],
+                'epis': [],
+                'manual_risks': []
+            }
+    def get_user_measurements(self, user_id): return st.session_state.mock_data['measurements']
+    def add_measurement(self, user_id, agent, value, unit, epi): st.session_state.mock_data['measurements'].append({'id': time.time(), 'agent': agent, 'value': value, 'unit': unit, 'epi': epi})
+    def remove_measurement(self, user_id, med_id): st.session_state.mock_data['measurements'] = [m for m in st.session_state.mock_data['measurements'] if m['id'] != med_id]
+    def get_user_epis(self, user_id): return st.session_state.mock_data['epis']
+    def add_epi(self, user_id, epi_name): st.session_state.mock_data['epis'].append({'id': time.time(), 'epi_name': epi_name})
+    def remove_epi(self, user_id, epi_id): st.session_state.mock_data['epis'] = [e for e in st.session_state.mock_data['epis'] if e['id'] != epi_id]
+    def get_user_manual_risks(self, user_id): return st.session_state.mock_data['manual_risks']
+    def add_manual_risk(self, user_id, category, risk_name, damages): st.session_state.mock_data['manual_risks'].append({'id': time.time(), 'category': category, 'risk_name': risk_name, 'possible_damages': damages})
+    def remove_manual_risk(self, user_id, risk_id): st.session_state.mock_data['manual_risks'] = [r for r in st.session_state.mock_data['manual_risks'] if r['id'] != risk_id]
+
+# --- FIM DO MOCKUP ---
+
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -27,8 +58,8 @@ st.set_page_config(
 UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
 AGENTES_DE_RISCO = sorted([
     "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
-    "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
-    "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias", 
+    "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras",
+    "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias",
     "Protozoários", "Fungos", "Parasitas", "Bacilos"
 ])
 CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
@@ -36,9 +67,17 @@ CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'b
 # --- Inicialização dos Gerenciadores ---
 @st.cache_resource
 def init_managers():
-    db_manager = DatabaseManager()
-    auth_manager = AuthManager(db_manager)
-    user_data_manager = UserDataManager(db_manager)
+    # Se estiver usando o banco de dados real, comente as linhas do Mock e descomente as outras.
+    db_manager = MockDBManager()
+    auth_manager = MockAuthManager(db_manager)
+    user_data_manager = MockUserDataManager(db_manager)
+    
+    # from database.models import DatabaseManager
+    # from database.auth import AuthManager
+    # from database.user_data import UserDataManager
+    # db_manager = DatabaseManager()
+    # auth_manager = AuthManager(db_manager)
+    # user_data_manager = UserDataManager(db_manager)
     return db_manager, auth_manager, user_data_manager
 
 db_manager, auth_manager, user_data_manager = init_managers()
@@ -62,12 +101,12 @@ st.markdown("""
         background-color: #f9f9f9;
     }
     .user-info {
-        background-color: #262730; 
-        color: white;            
+        background-color: #262730;
+        color: white;
         padding: 1rem;
         border-radius: 5px;
         margin-bottom: 1rem;
-        border: 1px solid #3DD56D; 
+        border: 1px solid #3DD56D;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -86,7 +125,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False 
+                        st.session_state.user_data_loaded = False
                         st.success(message)
                         st.rerun()
                     else:
@@ -152,7 +191,7 @@ def init_user_session_state():
             st.session_state.epis_adicionados = user_data_manager.get_user_epis(user_id)
             st.session_state.riscos_manuais_adicionados = user_data_manager.get_user_manual_risks(user_id)
             st.session_state.user_data_loaded = True
-    
+
     if 'medicoes_adicionadas' not in st.session_state:
         st.session_state.medicoes_adicionadas = []
     if 'epis_adicionados' not in st.session_state:
@@ -229,29 +268,73 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
-def substituir_placeholders(doc, contexto):
+# --- FUNÇÃO DE SUBSTITUIÇÃO CORRIGIDA ---
+def substituir_placeholders_com_logica_medicoes(doc, contexto):
+    """
+    Substitui placeholders em um documento Word, com lógica especial para
+    a chave '[MEDIÇÕES]' para evitar problemas de espaçamento.
+    """
+    # Itera sobre tabelas
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                for p in cell.paragraphs:
-                    # Usando uma abordagem mais simples e direta
-                    inline = p.runs
-                    # Substitui o texto preservando a formatação do primeiro run
-                    for i in range(len(inline)):
-                        for key, value in contexto.items():
-                            if key in inline[i].text:
-                                text = inline[i].text.replace(key, str(value))
-                                inline[i].text = text
+                # Usa uma cópia da lista de parágrafos para iterar enquanto modifica
+                for p in list(cell.paragraphs):
+                    # Lógica especial para o placeholder de medições
+                    if '[MEDIÇÕES]' in p.text:
+                        valor_medicoes = contexto.get('[MEDIÇÕES]')
+                        
+                        # Se for uma lista (nossas medições formatadas)
+                        if isinstance(valor_medicoes, list) and valor_medicoes:
+                            # Limpa o parágrafo original que continha o placeholder
+                            p.text = ""
+                            
+                            # Adiciona a primeira linha de medição ao parágrafo existente
+                            run = p.add_run(valor_medicoes[0])
+                            run.font.name = 'Segoe UI'
+                            run.font.size = Pt(9)
+                            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+                            # Adiciona as linhas restantes como NOVOS parágrafos na mesma célula
+                            for linha_medicao in valor_medicoes[1:]:
+                                new_p = cell.add_paragraph()
+                                run = new_p.add_run(linha_medicao)
+                                run.font.name = 'Segoe UI'
+                                run.font.size = Pt(9)
+                                new_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        
+                        # Se for uma string (ex: "Não aplicável"), apenas substitui
+                        else:
+                            p.text = p.text.replace('[MEDIÇÕES]', str(valor_medicoes))
+
+                    # Lógica normal para todos os outros placeholders
+                    # Usamos um loop `while` para lidar com múltiplas substituições no mesmo parágrafo
+                    inline_text = "".join(run.text for run in p.runs)
+                    for key, value in contexto.items():
+                        if key != '[MEDIÇÕES]' and key in inline_text:
+                            # Substitui o texto e recria os runs para manter a formatação
+                            new_text = inline_text.replace(key, str(value))
+                            p.clear()
+                            run = p.add_run(new_text)
+                            run.font.name = 'Segoe UI'
+                            run.font.size = Pt(9)
+                            inline_text = new_text # Atualiza para a próxima iteração
+
+    # Itera sobre parágrafos fora de tabelas (se houver)
     for p in doc.paragraphs:
-        # Mesma lógica para parágrafos fora de tabelas
-        inline = p.runs
-        for i in range(len(inline)):
-            for key, value in contexto.items():
-                if key in inline[i].text:
-                    text = inline[i].text.replace(key, str(value))
-                    inline[i].text = text
+        # A mesma lógica de substituição pode ser aplicada aqui
+        inline_text = "".join(run.text for run in p.runs)
+        for key, value in contexto.items():
+            if key in inline_text:
+                # Lógica simples de substituição para parágrafos fora de tabelas
+                new_text = inline_text.replace(key, str(value))
+                p.clear()
+                run = p.add_run(new_text)
+                run.font.name = 'Segoe UI'
+                run.font.size = Pt(9)
+                inline_text = new_text
 
-
+# --- FUNÇÃO DE GERAR OS ATUALIZADA ---
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
@@ -274,23 +357,17 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
-        
+
+    # --- LÓGICA DE MEDIÇÕES ATUALIZADA ---
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
-    
     medicoes_formatadas = []
-    # --- INÍCIO DA ALTERAÇÃO: REMOÇÃO DO ALINHAMENTO ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
-        epi = med.get('epi', '')
-        
-        epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        # Formato simples, sem tabulação ou espaços extras
-        medicoes_formatadas.append(f"{agente}: {valor} {unidade}{epi_info}")
-    # --- FIM DA ALTERAÇÃO ---
-    medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
-    
+        # Formato simples: Agente: Valor Unidade
+        medicoes_formatadas.append(f"{agente}: {valor} {unidade}")
+
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
@@ -298,17 +375,16 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
-    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
 
     contexto = {
-        "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
+        "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")),
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
-        "[NOME FUNCIONÁRIO]": str(funcionario.get("nome_do_funcionario", "N/A")), 
+        "[NOME FUNCIONÁRIO]": str(funcionario.get("nome_do_funcionario", "N/A")),
         "[DATA DE ADMISSÃO]": data_admissao,
-        "[SETOR]": str(funcionario.get("setor", "N/A")), 
+        "[SETOR]": str(funcionario.get("setor", "N/A")),
         "[FUNÇÃO]": str(funcionario.get("funcao", "N/A")),
         "[DESCRIÇÃO DE ATIVIDADES]": descricao_atividades,
         "[RISCOS FÍSICOS]": tratar_lista_vazia(riscos_por_categoria["fisico"]),
@@ -322,23 +398,26 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
         "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
         "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
-        "[MEDIÇÕES]": medicoes_texto,
+        # Passa a lista de medições ou a string "Não aplicável"
+        "[MEDIÇÕES]": medicoes_formatadas if medicoes_formatadas else "Não aplicável",
     }
-    substituir_placeholders(doc, contexto)
+
+    # Usa a nova função de substituição
+    substituir_placeholders_com_logica_medicoes(doc, contexto)
     return doc
 
 # --- APLICAÇÃO PRINCIPAL ---
 def main():
     check_authentication()
     init_user_session_state()
-    
+
     if not st.session_state.get('authenticated'):
         show_login_page()
         return
-    
+
     user_id = st.session_state.user_data['user_id']
     show_user_info()
-    
+
     st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
 
     with st.container(border=True):
@@ -352,7 +431,7 @@ def main():
     if not arquivo_funcionarios or not arquivo_modelo_os:
         st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
         return
-    
+
     df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
     if df_funcionarios_raw is None:
         st.stop()
@@ -401,124 +480,4 @@ def main():
                 categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
                 danos_manuais = st.text_area("Possíveis Danos (Opcional)")
                 if st.form_submit_button("Adicionar Risco Manual"):
-                    if risco_manual_nome and categoria_manual:
-                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-            if st.session_state.riscos_manuais_adicionados:
-                st.write("**Riscos manuais salvos:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    col1, col2 = st.columns([4, 1])
-                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
-                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
-                        user_data_manager.remove_manual_risk(user_id, r['id'])
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-        
-        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
-        if total_riscos > 0:
-            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
-                    if not categoria_key_series.empty:
-                        categoria_key = categoria_key_series.iloc[0]
-                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
-                        if categoria_display:
-                            riscos_para_exibir[categoria_display].append(risco_nome)
-                for risco_manual in st.session_state.riscos_manuais_adicionados:
-                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
-                for categoria, lista_riscos in riscos_para_exibir.items():
-                    if lista_riscos:
-                        st.markdown(f"**{categoria}**")
-                        for risco in sorted(list(set(lista_riscos))):
-                            st.markdown(f"- {risco}")
-        
-        st.divider()
-
-        col_exp1, col_exp2 = st.columns(2)
-        with col_exp1:
-            with st.expander("📊 **Adicionar Medições**"):
-                with st.form("form_medicao", clear_on_submit=True):
-                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
-                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
-                    agente_manual = st.text_input("...ou digite um novo aqui:")
-                    valor = st.text_input("Valor Medido")
-                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
-                    epi_med = st.text_input("EPI Associado (Opcional)")
-                    if st.form_submit_button("Adicionar Medição"):
-                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
-                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
-                            user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                        else:
-                            st.warning("Por favor, preencha o Agente e o Valor.")
-                if st.session_state.medicoes_adicionadas:
-                    st.write("**Medições salvas:**")
-                    for med in st.session_state.medicoes_adicionadas:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {med['agent']}: {med['value']} {med['unit']}")
-                        if col2.button("Remover", key=f"rem_med_{med['id']}"):
-                            user_data_manager.remove_measurement(user_id, med['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-        with col_exp2:
-            with st.expander("🦺 **Adicionar EPIs Gerais**"):
-                with st.form("form_epi", clear_on_submit=True):
-                    epi_nome = st.text_input("Nome do EPI")
-                    if st.form_submit_button("Adicionar EPI"):
-                        if epi_nome:
-                            user_data_manager.add_epi(user_id, epi_nome)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                if st.session_state.epis_adicionados:
-                    st.write("**EPIs salvos:**")
-                    for epi in st.session_state.epis_adicionados:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {epi['epi_name']}")
-                        if col2.button("Remover", key=f"rem_epi_{epi['id']}"):
-                            user_data_manager.remove_epi(user_id, epi['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-
-    st.divider()
-    if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
-        with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
-            documentos_gerados = []
-            combinacoes_processadas = set()
-            for _, func in df_final_filtrado.iterrows():
-                combinacoes_processadas.add((func['setor'], func['funcao']))
-                doc = gerar_os(
-                    func, 
-                    df_pgr, 
-                    riscos_selecionados, 
-                    st.session_state.epis_adicionados,
-                    st.session_state.medicoes_adicionadas, 
-                    st.session_state.riscos_manuais_adicionados, 
-                    arquivo_modelo_os
-                )
-                doc_io = BytesIO()
-                doc.save(doc_io)
-                doc_io.seek(0)
-                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
-                caminho_no_zip = f"{func.get('setor', 'SemSetor')}/{func.get('funcao', 'SemFuncao')}/OS_{nome_limpo}.docx"
-                documentos_gerados.append((caminho_no_zip, doc_io.getvalue()))
-            st.session_state.cargos_concluidos.update(combinacoes_processadas)
-            if documentos_gerados:
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for nome_arquivo, conteudo_doc in documentos_gerados:
-                        zip_file.writestr(nome_arquivo, conteudo_doc)
-                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
-                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
-                st.download_button(
-                    label="📥 Baixar Todas as OS (.zip)", 
-                    data=zip_buffer.getvalue(), 
-                    file_name=nome_arquivo_zip, 
-                    mime="application/zip",
-                    use_container_width=True
-                )
-
-if __name__ == "__main__":
-    main()
+                    
