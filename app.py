@@ -229,31 +229,32 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
-# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MELHORADA ---
+# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO SIMPLIFICADA E ROBUSTA ---
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders em parágrafos e tabelas, preservando a formatação
-    do texto que não é o placeholder.
+    Substitui placeholders de forma simples e direta em parágrafos e tabelas.
+    Esta abordagem é mais robusta contra erros de formatação complexa.
     """
-    elementos = list(doc.paragraphs)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                elementos.extend(cell.paragraphs)
-    
-    for p in elementos:
-        # Percorre todos os 'runs' (trechos de texto com a mesma formatação) do parágrafo
-        for run in p.runs:
-            for key, value in contexto.items():
-                if key in run.text:
-                    # Substitui o texto dentro do run
-                    run.text = run.text.replace(key, str(value))
-                    # Aplica a formatação padrão ao texto inserido
+                for p in cell.paragraphs:
+                    for key, value in contexto.items():
+                        if key in p.text:
+                            # Substituição direta no texto do parágrafo
+                            p.text = p.text.replace(key, str(value))
+                            # Aplica a fonte desejada a todo o parágrafo modificado
+                            for run in p.runs:
+                                run.font.name = 'Segoe UI'
+                                run.font.size = Pt(9)
+
+    for p in doc.paragraphs:
+        for key, value in contexto.items():
+            if key in p.text:
+                p.text = p.text.replace(key, str(value))
+                for run in p.runs:
                     run.font.name = 'Segoe UI'
                     run.font.size = Pt(9)
-                    run.bold = False
-                    run.italic = False
-                    run.underline = False
 # --- FIM DA ALTERAÇÃO 1 ---
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
@@ -282,7 +283,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     
     medicoes_formatadas = []
-    # --- INÍCIO DA ALTERAÇÃO 2: REMOÇÃO DO ESPAÇAMENTO EXTRA ---
+    # --- INÍCIO DA ALTERAÇÃO 2: FORMATAÇÃO COMPACTA DAS MEDIÇÕES ---
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
@@ -290,7 +291,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         epi = med.get('epi', '')
         
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        # Formato simples para garantir que não haja espaços extras
+        # Formato simples com apenas um espaço, sem alinhamento extra
         medicoes_formatadas.append(f"{agente}: {valor} {unidade}{epi_info}")
     # --- FIM DA ALTERAÇÃO 2 ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
