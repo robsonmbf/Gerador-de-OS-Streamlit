@@ -494,7 +494,12 @@ def main():
         return
     
     # Usuário autenticado - mostrar aplicação principal
-    show_user_info()
+    # --- INÍCIO DA CORREÇÃO ---
+    # Garante que a barra de info do usuário só apareça se ele estiver logado
+    if st.session_state.authenticated:
+        show_user_info()
+    # --- FIM DA CORREÇÃO ---
+    
     init_user_session_state()
     
     # Log da atividade de acesso
@@ -535,4 +540,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
