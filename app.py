@@ -67,7 +67,8 @@ CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'b
 # --- Inicialização dos Gerenciadores ---
 @st.cache_resource
 def init_managers():
-    # Se estiver usando o banco de dados real, comente as linhas do Mock e descomente as outras.
+    # Usando o Mock para facilitar a execução. Para usar o banco de dados real,
+    # comente as linhas do Mock e descomente as outras.
     db_manager = MockDBManager()
     auth_manager = MockAuthManager(db_manager)
     user_data_manager = MockUserDataManager(db_manager)
@@ -274,65 +275,80 @@ def substituir_placeholders_com_logica_medicoes(doc, contexto):
     Substitui placeholders em um documento Word, com lógica especial para
     a chave '[MEDIÇÕES]' para evitar problemas de espaçamento.
     """
-    # Itera sobre tabelas
+    elementos_para_processar = list(doc.paragraphs)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                # Usa uma cópia da lista de parágrafos para iterar enquanto modifica
-                for p in list(cell.paragraphs):
-                    # Lógica especial para o placeholder de medições
-                    if '[MEDIÇÕES]' in p.text:
-                        valor_medicoes = contexto.get('[MEDIÇÕES]')
-                        
-                        # Se for uma lista (nossas medições formatadas)
-                        if isinstance(valor_medicoes, list) and valor_medicoes:
-                            # Limpa o parágrafo original que continha o placeholder
-                            p.text = ""
-                            
-                            # Adiciona a primeira linha de medição ao parágrafo existente
-                            run = p.add_run(valor_medicoes[0])
-                            run.font.name = 'Segoe UI'
-                            run.font.size = Pt(9)
-                            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                elementos_para_processar.extend(cell.paragraphs)
 
-                            # Adiciona as linhas restantes como NOVOS parágrafos na mesma célula
-                            for linha_medicao in valor_medicoes[1:]:
-                                new_p = cell.add_paragraph()
-                                run = new_p.add_run(linha_medicao)
-                                run.font.name = 'Segoe UI'
-                                run.font.size = Pt(9)
-                                new_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                        
-                        # Se for uma string (ex: "Não aplicável"), apenas substitui
-                        else:
-                            p.text = p.text.replace('[MEDIÇÕES]', str(valor_medicoes))
+    for p in elementos_para_processar:
+        # Lógica especial para o placeholder de medições
+        if '[MEDIÇÕES]' in p.text:
+            valor_medicoes = contexto.get('[MEDIÇÕES]')
+            
+            # Limpa o parágrafo do placeholder
+            p.text = ""
+            
+            # Se for uma lista (nossas medições formatadas)
+            if isinstance(valor_medicoes, list) and valor_medicoes:
+                # Adiciona a primeira linha de medição ao parágrafo existente
+                run = p.add_run(valor_medicoes[0])
+                run.font.name = 'Segoe UI'
+                run.font.size = Pt(9)
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-                    # Lógica normal para todos os outros placeholders
-                    # Usamos um loop `while` para lidar com múltiplas substituições no mesmo parágrafo
-                    inline_text = "".join(run.text for run in p.runs)
-                    for key, value in contexto.items():
-                        if key != '[MEDIÇÕES]' and key in inline_text:
-                            # Substitui o texto e recria os runs para manter a formatação
-                            new_text = inline_text.replace(key, str(value))
-                            p.clear()
-                            run = p.add_run(new_text)
-                            run.font.name = 'Segoe UI'
-                            run.font.size = Pt(9)
-                            inline_text = new_text # Atualiza para a próxima iteração
+                # Adiciona as linhas restantes como NOVOS parágrafos
+                # A biblioteca python-docx adiciona o novo parágrafo no local correto (dentro da célula)
+                for linha_medicao in valor_medicoes[1:]:
+                    new_p = p.insert_paragraph_before(linha_medicao)._p
+                    # Precisamos buscar o novo parágrafo para formatá-lo
+                    # Esta parte é complexa, uma abordagem mais simples é adicionar ao final da célula
+                    # Vamos usar uma abordagem mais segura: adicionar ao final da célula
+                    
+                # Abordagem mais segura e funcional:
+                # Limpa o parágrafo original
+                p.text = ""
+                cell = p._parent # Acessa a célula que contém o parágrafo
+                
+                # Remove o parágrafo vazio para não criar linha extra
+                # (opcional, mas limpa o doc)
+                if not p.text and not p.runs:
+                     # A remoção de parágrafos é complexa, vamos apenas limpá-lo
+                     pass
 
-    # Itera sobre parágrafos fora de tabelas (se houver)
-    for p in doc.paragraphs:
-        # A mesma lógica de substituição pode ser aplicada aqui
+                for i, linha_medicao in enumerate(valor_medicoes):
+                    # Adiciona o texto ao primeiro parágrafo (que já limpamos)
+                    if i == 0:
+                        run = p.add_run(linha_medicao)
+                        run.font.name = 'Segoe UI'
+                        run.font.size = Pt(9)
+                        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    # Adiciona novos parágrafos para as linhas seguintes
+                    else:
+                        new_p = cell.add_paragraph(style=p.style)
+                        run = new_p.add_run(linha_medicao)
+                        run.font.name = 'Segoe UI'
+                        run.font.size = Pt(9)
+                        new_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+            # Se for uma string (ex: "Não aplicável"), apenas adiciona
+            else:
+                run = p.add_run(str(valor_medicoes))
+                run.font.name = 'Segoe UI'
+                run.font.size = Pt(9)
+
+        # Lógica normal para todos os outros placeholders
+        # Usamos um loop `while` para lidar com múltiplas substituições no mesmo parágrafo
         inline_text = "".join(run.text for run in p.runs)
         for key, value in contexto.items():
-            if key in inline_text:
-                # Lógica simples de substituição para parágrafos fora de tabelas
+            if key != '[MEDIÇÕES]' and key in inline_text:
+                # Substitui o texto e recria os runs para manter a formatação
                 new_text = inline_text.replace(key, str(value))
                 p.clear()
                 run = p.add_run(new_text)
                 run.font.name = 'Segoe UI'
                 run.font.size = Pt(9)
-                inline_text = new_text
+                inline_text = new_text # Atualiza para a próxima iteração
 
 # --- FUNÇÃO DE GERAR OS ATUALIZADA ---
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
@@ -358,14 +374,12 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # --- LÓGICA DE MEDIÇÕES ATUALIZADA ---
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
-        # Formato simples: Agente: Valor Unidade
         medicoes_formatadas.append(f"{agente}: {valor} {unidade}")
 
     data_admissao = "Não informado"
@@ -398,11 +412,9 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
         "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
         "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
-        # Passa a lista de medições ou a string "Não aplicável"
         "[MEDIÇÕES]": medicoes_formatadas if medicoes_formatadas else "Não aplicável",
     }
 
-    # Usa a nova função de substituição
     substituir_placeholders_com_logica_medicoes(doc, contexto)
     return doc
 
@@ -460,7 +472,8 @@ def main():
         funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
-        st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
+        if not df_final_filtrado.empty:
+            st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
 
     with st.container(border=True):
         st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
@@ -474,10 +487,4 @@ def main():
                 selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
                 riscos_selecionados.extend(selecionados)
         with tabs[-1]:
-            with st.form("form_risco_manual", clear_on_submit=True):
-                st.markdown("###### Adicionar um Risco que não está na lista")
-                risco_manual_nome = st.text_input("Descrição do Risco")
-                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
-                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
-                if st.form_submit_button("Adicionar Risco Manual"):
-                    
+            with st.form("
