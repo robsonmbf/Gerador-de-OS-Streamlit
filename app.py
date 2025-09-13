@@ -257,8 +257,6 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
             danos = risco_row.get("possiveis_danos")
             if pd.notna(danos): danos_por_categoria[categoria].append(str(danos))
-    
-    # --- FUNCIONALIDADE JÁ EXISTENTE: INCLUSÃO DE RISCOS MANUAIS ---
     if riscos_manuais:
         map_categorias_rev = {v: k for k, v in CATEGORIAS_RISCO.items()}
         for risco_manual in riscos_manuais:
@@ -268,7 +266,6 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                 riscos_por_categoria[categoria_alvo].append(risco_manual.get('risco', ''))
                 if risco_manual.get('danos'):
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
-    
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agente'])
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
@@ -471,7 +468,9 @@ def main():
                     mime="application/zip",
                     use_container_width=True
                 )
-                st.rerun()
+                # --- INÍCIO DA CORREÇÃO ---
+                # Removido o st.rerun() que impedia o botão de download de aparecer
+                # --- FIM DA CORREÇÃO ---
 
 if __name__ == "__main__":
     main()
