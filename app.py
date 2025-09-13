@@ -86,7 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False
+                        st.session_state.user_data_loaded = False 
                         st.success(message)
                         st.rerun()
                     else:
@@ -229,49 +229,21 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
-# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MAIS ROBUSTA ---
 def substituir_placeholders(doc, contexto):
-    """
-    Substitui placeholders em parágrafos e tabelas, preservando melhor a formatação.
-    """
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for key, value in contexto.items():
+                        if key in p.text:
+                            # Lógica de substituição mais simples para evitar conflitos de formatação
+                            # Esta lógica substitui o texto, mas pode não preservar formatação mista
+                            p.text = p.text.replace(key, str(value))
+
     for p in doc.paragraphs:
         for key, value in contexto.items():
             if key in p.text:
-                texto_original = p.text
-                # Salva a formatação de cada trecho de texto
-                runs_format = [(run.text, run.font.bold, run.font.italic, run.font.underline, run.font.size, run.font.name) for run in p.runs]
-                p.text = texto_original.replace(key, str(value))
-                
-                # Reaplica a formatação original aos trechos que não são o placeholder
-                start_pos = texto_original.find(key)
-                if start_pos != -1:
-                    # Limpa os runs e reconstrói
-                    p.clear()
-                    
-                    # Parte antes do placeholder
-                    run_antes = p.add_run(texto_original[:start_pos])
-                    if runs_format:
-                        run_antes.bold, run_antes.italic, run_antes.underline, run_antes.font.size, run_antes.font.name = runs_format[0][1:]
-
-                    # Valor do placeholder (com formatação padrão)
-                    value_lines = str(value).split('\n')
-                    for i, line in enumerate(value_lines):
-                        run_valor = p.add_run(line)
-                        run_valor.bold = False
-                        run_valor.italic = False
-                        run_valor.underline = False
-                        run_valor.font.name = 'Segoe UI'
-                        run_valor.font.size = Pt(9)
-                        if i < len(value_lines) - 1:
-                            run_valor.add_break()
-
-                    # Parte depois do placeholder
-                    run_depois = p.add_run(texto_original[start_pos + len(key):])
-                    if runs_format:
-                        # Pega a formatação do último run original
-                        last_format = runs_format[-1]
-                        run_depois.bold, run_depois.italic, run_depois.underline, run_depois.font.size, run_depois.font.name = last_format[1:]
-
+                p.text = p.text.replace(key, str(value))
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -295,29 +267,19 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
-        
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
-    
     medicoes_formatadas = []
-    # --- INÍCIO DA ALTERAÇÃO 2: ALINHAMENTO CONSISTENTE DAS MEDIÇÕES ---
-    # Encontra o agente com o nome mais longo para calcular o preenchimento
     max_len = 0
     if medicoes_ordenadas:
         max_len = max(len(med.get('agent', '')) for med in medicoes_ordenadas)
-
     for med in medicoes_ordenadas:
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
         epi = med.get('epi', '')
-        
-        # Adiciona espaços para alinhar
         padding = ' ' * (max_len - len(agente))
-        
         epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
         medicoes_formatadas.append(f"{agente}:{padding}\t{valor} {unidade}{epi_info}")
-    # --- FIM DA ALTERAÇÃO 2 ---
-
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
@@ -462,24 +424,20 @@ def main():
         
         st.divider()
 
-        col_exp1, col2 = st.columns(2)
+        # --- INÍCIO DA ALTERAÇÃO: LAYOUT DE 3 COLUNAS E SEÇÃO DE EPIs RESTAURADA ---
+        col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
-                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
-                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
-                    agente_manual = st.text_input("...ou digite um novo aqui:")
+                    agente_a_salvar = st.text_input("Agente/Fonte")
                     valor = st.text_input("Valor Medido")
                     unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
                     epi_med = st.text_input("EPI Associado (Opcional)")
                     if st.form_submit_button("Adicionar Medição"):
-                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
-                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
+                        if agente_a_salvar and valor:
                             user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
                             st.session_state.user_data_loaded = False
                             st.rerun()
-                        else:
-                            st.warning("Por favor, preencha o Agente e o Valor.")
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Medições salvas:**")
                     for med in st.session_state.medicoes_adicionadas:
@@ -490,6 +448,12 @@ def main():
                             st.session_state.user_data_loaded = False
                             st.rerun()
         with col_exp2:
+            with st.expander("➕ **Adicionar Risco Manual (Alternativo)**"):
+                 # Este expander está aqui caso você queira adicionar um risco manual fora da aba
+                 # A funcionalidade principal está na aba "➕ Manual"
+                 st.info("Para adicionar riscos manuais, por favor, use a aba '➕ Manual' na seção de seleção de riscos acima.")
+
+        with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
                 with st.form("form_epi", clear_on_submit=True):
                     epi_nome = st.text_input("Nome do EPI")
@@ -507,6 +471,7 @@ def main():
                             user_data_manager.remove_epi(user_id, epi['id'])
                             st.session_state.user_data_loaded = False
                             st.rerun()
+        # --- FIM DA ALTERAÇÃO ---
 
     st.divider()
     if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
