@@ -168,7 +168,7 @@ def show_user_info():
                 logout_user()
 
 def init_user_session_state():
-    """Inicializa o session state com dados do usuário do banco de dados"""
+    """Inicializa o session state para os dados do app"""
     if 'medicoes_adicionadas' not in st.session_state:
         st.session_state.medicoes_adicionadas = []
     if 'epis_adicionados' not in st.session_state:
@@ -214,15 +214,14 @@ def carregar_planilha(arquivo):
         st.error(f"Erro ao ler o ficheiro Excel: {e}")
         return None
 
+@st.cache_data
 def obter_dados_pgr():
     data = [
-        {'categoria': 'fisico', 'risco': 'Ruído (Contínuo ou Intermitente)', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'},
-        {'categoria': 'fisico', 'risco': 'Ruído (Impacto)', 'possiveis_danos': 'Perda auditiva, trauma acústico.'},
-        {'categoria': 'fisico', 'risco': 'Vibração de Corpo Inteiro', 'possiveis_danos': 'Problemas na coluna, dores lombares.'},
-        {'categoria': 'fisico', 'risco': 'Vibração de Mãos e Braços', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios (síndrome de Raynaud).'},
-        {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'},
-        {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses (silicose, asbestose), irritação respiratória, alergias.'},
-        {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'},
+        {'categoria': 'fisico', 'risco': 'Ruído (Contínuo ou Intermitente)', 'possiveis_danos': 'Perda auditiva, zumbido, estresse.'},
+        {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras.'},
+        {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Doenças respiratórias, alergias.'},
+        {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções diversas.'},
+        {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna.'},
         {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'}
     ]
     return pd.DataFrame(data)
@@ -318,7 +317,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
 def main():
     """Função principal da aplicação"""
     check_authentication()
-    init_user_session_state() # Inicializa o estado da sessão para todos
+    init_user_session_state()
     
     if not st.session_state.authenticated:
         show_login_page()
@@ -327,26 +326,23 @@ def main():
     if st.session_state.authenticated:
         show_user_info()
     
-    user_id = st.session_state.user_data.get('user_id')
-    if user_id:
-        db_manager.log_activity(user_id, 'app_access')
-    
     st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
 
     with st.container(border=True):
         st.markdown("##### 📂 1. Carregue os Documentos")
         col1, col2 = st.columns(2)
         with col1:
-            arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx", help="Planilha com colunas como: Nome, Função, Setor, Empresa, etc.")
+            arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx")
         with col2:
-            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx", help="Documento Word com placeholders como [NOME FUNCIONÁRIO], [SETOR], etc.")
+            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
 
     if not arquivo_funcionarios or not arquivo_modelo_os:
         st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
         return
-
+    
     df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
     if df_funcionarios_raw is None:
+        st.error("Não foi possível ler a planilha de funcionários. Verifique o arquivo.")
         st.stop()
 
     df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
@@ -374,24 +370,26 @@ def main():
 
         st.markdown("**Riscos Identificados (PGR)**")
         riscos_selecionados = []
+        CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
         tabs = st.tabs(list(CATEGORIAS_RISCO.values()))
         for i, (key, nome) in enumerate(CATEGORIAS_RISCO.items()):
             with tabs[i]:
                 riscos_categoria = df_pgr[df_pgr['categoria'] == key]['risco'].tolist()
-                selecionados = st.multiselect(f"Selecione os riscos:", options=riscos_categoria, key=f"riscos_{key}", default=[])
+                selecionados = st.multiselect(f"Selecione os riscos:", options=riscos_categoria, key=f"riscos_{key}")
                 riscos_selecionados.extend(selecionados)
 
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
-                with st.form("form_medicao", clear_on_submit=True):
-                    agente_selecionado = st.selectbox("Agente/Fonte", options=AGENTES_DE_RISCO, key="agente_input")
-                    valor = st.text_input("Valor Medido", key="valor_input")
-                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA, key="unidade_input")
-                    epi = st.text_input("EPI Associado", key="epi_medicao_input")
+                with st.form("form_medicao"):
+                    agente = st.selectbox("Agente/Fonte", AGENTES_DE_RISCO)
+                    valor = st.text_input("Valor Medido")
+                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
+                    epi_med = st.text_input("EPI Associado")
                     submitted = st.form_submit_button("Adicionar Medição")
-                    if submitted and agente_selecionado and valor:
-                        st.session_state.medicoes_adicionadas.append({"agente": agente_selecionado, "valor": valor, "unidade": unidade, "epi": epi})
+                    if submitted and agente and valor:
+                        st.session_state.medicoes_adicionadas.append({"agente": agente, "valor": valor, "unidade": unidade, "epi": epi_med})
+                        st.experimental_rerun()
                 if st.session_state.medicoes_adicionadas:
                     st.write("**Adicionadas:**")
                     for med in st.session_state.medicoes_adicionadas:
@@ -399,13 +397,14 @@ def main():
 
         with col_exp2:
             with st.expander("➕ **Adicionar Risco Manual**"):
-                 with st.form("form_risco_manual", clear_on_submit=True):
+                 with st.form("form_risco_manual"):
                     risco = st.text_input("Descrição do Risco")
-                    categoria = st.selectbox("Categoria", options=list(CATEGORIAS_RISCO.values()))
+                    categoria = st.selectbox("Categoria", list(CATEGORIAS_RISCO.values()))
                     danos = st.text_area("Possíveis Danos")
                     submitted = st.form_submit_button("Adicionar Risco")
                     if submitted and risco and categoria:
                         st.session_state.riscos_manuais_adicionados.append({"risco": risco, "categoria": categoria, "danos": danos})
+                        st.experimental_rerun()
                  if st.session_state.riscos_manuais_adicionados:
                     st.write("**Adicionados:**")
                     for r in st.session_state.riscos_manuais_adicionados:
@@ -413,11 +412,12 @@ def main():
 
         with col_exp3:
             with st.expander("🦺 **Adicionar EPIs Gerais**"):
-                with st.form("form_epi", clear_on_submit=True):
+                with st.form("form_epi"):
                     epi_nome = st.text_input("Nome do EPI")
                     submitted = st.form_submit_button("Adicionar EPI")
                     if submitted and epi_nome:
                         st.session_state.epis_adicionados.append(epi_nome)
+                        st.experimental_rerun()
                 if st.session_state.epis_adicionados:
                     st.write("**Adicionados:**")
                     for epi_item in st.session_state.epis_adicionados:
@@ -429,4 +429,29 @@ def main():
         with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
             documentos_gerados = []
             for _, func in df_final_filtrado.iterrows():
-                doc = gerar_os(func, df_pgr, riscos_selecionados, epis_
+                doc = gerar_os(func, df_pgr, riscos_selecionados, epis_finais, st.session_state.medicoes_adicionadas, st.session_state.riscos_manuais_adicionados, arquivo_modelo_os)
+                doc_io = BytesIO()
+                doc.save(doc_io)
+                doc_io.seek(0)
+                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
+                documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
+
+            if documentos_gerados:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for nome_arquivo, conteudo_doc in documentos_gerados:
+                        zip_file.writestr(nome_arquivo, conteudo_doc)
+                
+                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
+                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
+                st.download_button(
+                    label="📥 Baixar Todas as OS (.zip)", 
+                    data=zip_buffer.getvalue(), 
+                    file_name=nome_arquivo_zip, 
+                    mime="application/zip",
+                    use_container_width=True
+                )
+    # --- FIM DA INTERFACE RESTANTE ---
+
+if __name__ == "__main__":
+    main()
