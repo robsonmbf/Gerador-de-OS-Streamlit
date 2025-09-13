@@ -266,22 +266,14 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                 riscos_por_categoria[categoria_alvo].append(risco_manual.get('risco', ''))
                 if risco_manual.get('danos'):
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('danos'))
-    
-    # --- INÍCIO DA ALTERAÇÃO 2: ORDENAR LISTA DE DANOS ---
-    # Ordena a lista de possíveis danos em cada categoria
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
-    # --- FIM DA ALTERAÇÃO 2 ---
-
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med['agente'])
     medicoes_formatadas = []
     for med in medicoes_ordenadas:
-        # --- INÍCIO DA ALTERAÇÃO 1: CORREÇÃO DA FORMATAÇÃO DA MEDIÇÃO ---
         epi_info = f" | EPI: {med['epi']}" if med.get("epi", "").strip() else ""
         medicoes_formatadas.append(f"{med['agente']}: {med['valor']} {med['unidade']}{epi_info}")
-        # --- FIM DA ALTERAÇÃO 1 ---
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
-    
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
@@ -289,11 +281,9 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades'])
-    
     def tratar_lista_vazia(lista, separador=", "):
         if not lista or all(not item.strip() for item in lista): return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
-
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", "N/A")), 
         "[UNIDADE]": str(funcionario.get("unidade", "N/A")),
@@ -352,16 +342,11 @@ def main():
 
     with st.container(border=True):
         st.markdown('##### 👥 2. Selecione os Funcionários')
-        
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
         setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
-        
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        
         st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
-        
         funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
-        
         funcoes_formatadas = []
         if setor_sel:
             for funcao in funcoes_disponiveis:
@@ -372,31 +357,23 @@ def main():
                     funcoes_formatadas.append(funcao)
         else:
             funcoes_formatadas = funcoes_disponiveis
-
         funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
-        
         funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
-        
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
-        
         st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
         st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
 
     with st.container(border=True):
         st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
         st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
-        
         riscos_selecionados = []
-        
         nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
         tabs = st.tabs(nomes_abas)
-
         for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
             with tabs[i]:
                 riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
                 selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
                 riscos_selecionados.extend(selecionados)
-
         with tabs[-1]:
             st.markdown("###### Adicionar um Risco que não está na lista")
             with st.form("form_risco_manual", clear_on_submit=True):
@@ -419,6 +396,33 @@ def main():
                             st.session_state.riscos_manuais_adicionados.pop(i)
                             st.rerun()
         
+        # --- INÍCIO DA NOVA FUNCIONALIDADE: RESUMO DOS RISCOS ---
+        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
+        if total_riscos > 0:
+            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
+                # Organiza os riscos por categoria para exibição
+                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
+                
+                # Adiciona os riscos selecionados do PGR
+                for risco_nome in riscos_selecionados:
+                    # Encontra a categoria do risco no DataFrame do PGR
+                    categoria_key = df_pgr[df_pgr['risco'] == risco_nome]['categoria'].iloc[0]
+                    categoria_display = CATEGORIAS_RISCO.get(categoria_key)
+                    if categoria_display:
+                        riscos_para_exibir[categoria_display].append(risco_nome)
+                
+                # Adiciona os riscos manuais
+                for risco_manual in st.session_state.riscos_manuais_adicionados:
+                    riscos_para_exibir[risco_manual['categoria']].append(risco_manual['risco'])
+
+                # Exibe as categorias que têm riscos
+                for categoria, lista_riscos in riscos_para_exibir.items():
+                    if lista_riscos:
+                        st.markdown(f"**{categoria}**")
+                        for risco in sorted(list(set(lista_riscos))):
+                            st.markdown(f"- {risco}")
+        # --- FIM DA NOVA FUNCIONALIDADE ---
+
         st.divider()
 
         col_exp1, col_exp2 = st.columns(2)
@@ -473,7 +477,6 @@ def main():
         epis_finais = ", ".join(st.session_state.epis_adicionados)
         with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
             documentos_gerados = []
-            
             combinacoes_processadas = set()
             for _, func in df_final_filtrado.iterrows():
                 combinacoes_processadas.add((func['setor'], func['funcao']))
@@ -483,15 +486,12 @@ def main():
                 doc_io.seek(0)
                 nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
                 documentos_gerados.append((f"OS_{nome_limpo}.docx", doc_io.getvalue()))
-
             st.session_state.cargos_concluidos.update(combinacoes_processadas)
-
             if documentos_gerados:
                 zip_buffer = BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     for nome_arquivo, conteudo_doc in documentos_gerados:
                         zip_file.writestr(nome_arquivo, conteudo_doc)
-                
                 nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
                 st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
                 st.download_button(
