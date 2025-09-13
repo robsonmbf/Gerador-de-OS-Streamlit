@@ -86,7 +86,7 @@ def show_login_page():
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False 
+                        st.session_state.user_data_loaded = False
                         st.success(message)
                         st.rerun()
                     else:
@@ -229,34 +229,50 @@ def obter_dados_pgr():
     ]
     return pd.DataFrame(data)
 
+# --- INÍCIO DA ALTERAÇÃO 1: FUNÇÃO DE SUBSTITUIÇÃO MAIS ROBUSTA ---
 def substituir_placeholders(doc, contexto):
-    elementos = list(doc.paragraphs)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                elementos.extend(cell.paragraphs)
-    for p in elementos:
-        full_text = "".join(run.text for run in p.runs)
+    """
+    Substitui placeholders em parágrafos e tabelas, preservando melhor a formatação.
+    """
+    for p in doc.paragraphs:
         for key, value in contexto.items():
-            if key in full_text:
-                style = p.style
-                p.clear()
-                p.style = style
-                parts = full_text.split(key)
-                for i, part in enumerate(parts):
-                    p.add_run(part)
-                    if i < len(parts) - 1:
-                        value_lines = str(value).split('\n')
-                        for j, line in enumerate(value_lines):
-                            run_valor = p.add_run(line)
-                            run_valor.bold = False
-                            run_valor.font.name = 'Segoe UI'
-                            run_valor.font.size = Pt(9)
-                            if j < len(value_lines) - 1:
-                                run_valor.add_break()
-                full_text = "".join(run.text for run in p.runs)
+            if key in p.text:
+                texto_original = p.text
+                # Salva a formatação de cada trecho de texto
+                runs_format = [(run.text, run.font.bold, run.font.italic, run.font.underline, run.font.size, run.font.name) for run in p.runs]
+                p.text = texto_original.replace(key, str(value))
+                
+                # Reaplica a formatação original aos trechos que não são o placeholder
+                start_pos = texto_original.find(key)
+                if start_pos != -1:
+                    # Limpa os runs e reconstrói
+                    p.clear()
+                    
+                    # Parte antes do placeholder
+                    run_antes = p.add_run(texto_original[:start_pos])
+                    if runs_format:
+                        run_antes.bold, run_antes.italic, run_antes.underline, run_antes.font.size, run_antes.font.name = runs_format[0][1:]
 
-# --- INÍCIO DA CORREÇÃO ---
+                    # Valor do placeholder (com formatação padrão)
+                    value_lines = str(value).split('\n')
+                    for i, line in enumerate(value_lines):
+                        run_valor = p.add_run(line)
+                        run_valor.bold = False
+                        run_valor.italic = False
+                        run_valor.underline = False
+                        run_valor.font.name = 'Segoe UI'
+                        run_valor.font.size = Pt(9)
+                        if i < len(value_lines) - 1:
+                            run_valor.add_break()
+
+                    # Parte depois do placeholder
+                    run_depois = p.add_run(texto_original[start_pos + len(key):])
+                    if runs_format:
+                        # Pega a formatação do último run original
+                        last_format = runs_format[-1]
+                        run_depois.bold, run_depois.italic, run_depois.underline, run_depois.font.size, run_depois.font.name = last_format[1:]
+
+
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
@@ -280,20 +296,28 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
         
-    # Usa a chave 'agent' (inglês), que é como vem do banco de dados
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     
     medicoes_formatadas = []
+    # --- INÍCIO DA ALTERAÇÃO 2: ALINHAMENTO CONSISTENTE DAS MEDIÇÕES ---
+    # Encontra o agente com o nome mais longo para calcular o preenchimento
+    max_len = 0
+    if medicoes_ordenadas:
+        max_len = max(len(med.get('agent', '')) for med in medicoes_ordenadas)
+
     for med in medicoes_ordenadas:
-        # Usa .get() para acessar as chaves de forma segura, evitando erros
         agente = med.get('agent', 'N/A')
         valor = med.get('value', 'N/A')
         unidade = med.get('unit', '')
         epi = med.get('epi', '')
         
-        epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        medicoes_formatadas.append(f"{agente}: \t{valor} {unidade}{epi_info}")
+        # Adiciona espaços para alinhar
+        padding = ' ' * (max_len - len(agente))
         
+        epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
+        medicoes_formatadas.append(f"{agente}:{padding}\t{valor} {unidade}{epi_info}")
+    # --- FIM DA ALTERAÇÃO 2 ---
+
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
@@ -328,7 +352,6 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     }
     substituir_placeholders(doc, contexto)
     return doc
-# --- FIM DA CORREÇÃO ---
 
 # --- APLICAÇÃO PRINCIPAL ---
 def main():
@@ -439,7 +462,7 @@ def main():
         
         st.divider()
 
-        col_exp1, col_exp2 = st.columns(2)
+        col_exp1, col2 = st.columns(2)
         with col_exp1:
             with st.expander("📊 **Adicionar Medições**"):
                 with st.form("form_medicao", clear_on_submit=True):
