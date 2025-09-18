@@ -234,8 +234,8 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders no documento Word de forma mais robusta.
-    Lida com placeholders que podem estar divididos entre múltiplos runs.
+    Substitui placeholders no documento Word de forma robusta.
+    Garante que o texto inserido não fique em negrito.
     """
     # Processar tabelas
     for table in doc.tables:
@@ -259,7 +259,6 @@ def substituir_placeholders(doc, contexto):
                             font_info = {
                                 'name': font.name,
                                 'size': font.size,
-                                'bold': font.bold,
                                 'italic': font.italic
                             }
                             # Limpar todos os runs
@@ -269,13 +268,16 @@ def substituir_placeholders(doc, contexto):
                         # Criar novo run com texto modificado
                         new_run = p.add_run(texto_modificado)
 
-                        # Restaurar formatação se havia
+                        # FORÇAR TEXTO SEM NEGRITO
+                        new_run.bold = False
+                        new_run.font.bold = False
+
+                        # Restaurar outras formatações
                         if font_info:
                             if font_info['name']:
                                 new_run.font.name = font_info['name']
                             if font_info['size']:
                                 new_run.font.size = font_info['size']
-                            new_run.font.bold = font_info['bold']
                             new_run.font.italic = font_info['italic']
 
     # Processar parágrafos fora de tabelas
@@ -297,7 +299,6 @@ def substituir_placeholders(doc, contexto):
                 font_info = {
                     'name': font.name,
                     'size': font.size,
-                    'bold': font.bold,
                     'italic': font.italic
                 }
                 # Limpar todos os runs
@@ -307,13 +308,16 @@ def substituir_placeholders(doc, contexto):
             # Criar novo run com texto modificado
             new_run = p.add_run(texto_modificado)
 
-            # Restaurar formatação se havia
+            # FORÇAR TEXTO SEM NEGRITO
+            new_run.bold = False
+            new_run.font.bold = False
+
+            # Restaurar outras formatações
             if font_info:
                 if font_info['name']:
                     new_run.font.name = font_info['name']
                 if font_info['size']:
                     new_run.font.size = font_info['size']
-                new_run.font.bold = font_info['bold']
                 new_run.font.italic = font_info['italic']
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
