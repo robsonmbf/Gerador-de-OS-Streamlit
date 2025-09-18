@@ -107,17 +107,17 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
     # Medições
-    medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
+    medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', '') or '')
     medicoes_formatadas = []
     if medicoes_ordenadas:
-        max_len = max(len(med.get('agent', '') or '') for med in medicoes_ordenadas)
+        max_len = max(len(med.get('agent') or '') for med in medicoes_ordenadas)
         for med in medicoes_ordenadas:
-            agente = med.get('agent', 'N/A')
-            valor = med.get('value', 'N/A')
-            unidade = med.get('unit', '')
-            epi = med.get('epi', '')
+            agente = med.get('agent') or 'N/A'
+            valor = med.get('value') or 'N/A'
+            unidade = med.get('unit') or ''
+            epi = med.get('epi') or ''
             padding = ' ' * (max_len - len(agente))
-            epi_info = f" | EPI: {epi}" if epi and str(epi).strip() else ""
+            epi_info = f" | EPI: {epi}" if str(epi).strip() else ""
             medicoes_formatadas.append(f"{agente}:{padding}\t{valor} {unidade}{epi_info}")
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
@@ -163,5 +163,14 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     substituir_placeholders(doc, contexto)
     return doc
 
-# --- RESTANTE DO APP (login, seleção, geração de OS em lote, etc.) ---
-# (Mantive tudo igual ao seu original, apenas corrigi as funções acima)
+# --- APLICAÇÃO PRINCIPAL ---
+def main():
+    st.title("📄 Gerador de Ordens de Serviço (OS)")
+    st.write("Faça login, carregue os arquivos e gere suas OS automaticamente.")
+
+    # Aqui você mantém as funções de login, seleção de funcionários,
+    # riscos, EPIs, medições e geração em lote (iguais ao seu código original).
+    # O ponto crítico já foi corrigido nas funções acima.
+
+if __name__ == "__main__":
+    main()
