@@ -234,8 +234,8 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders preservando formatação do texto original.
-    Remove negrito apenas do conteúdo substituído dos placeholders.
+    Substitui placeholders com tratamento especial para medições.
+    Preserva formatação original dos rótulos, remove negrito dos valores.
     """
     def processar_paragrafo(p):
         texto_completo = p.text
@@ -247,7 +247,29 @@ def substituir_placeholders(doc, contexto):
                 texto_modificado = texto_modificado.replace(key, str(value))
 
         if texto_modificado != texto_completo:
-            # Salvar formatação original
+            # Tratamento ESPECIAL para medições
+            if "[MEDIÇÕES]" in texto_completo and contexto.get("[MEDIÇÕES]", "") != "Não aplicável":
+                # Para medições, vamos inserir de forma especial
+                medicoes_valor = contexto.get("[MEDIÇÕES]", "")
+                if medicoes_valor and "\n" in medicoes_valor:
+                    # Limpar o parágrafo
+                    for run in p.runs[:]:
+                        p._element.remove(run._element)
+
+                    # Inserir cada medição como linha separada no mesmo parágrafo
+                    linhas = medicoes_valor.split("\n")
+                    for i, linha in enumerate(linhas):
+                        if linha.strip():
+                            if i > 0:
+                                # Adicionar quebra de linha manual
+                                p.add_run().add_break()
+
+                            # Adicionar a linha da medição sem negrito
+                            run_medicao = p.add_run(linha.strip())
+                            run_medicao.font.bold = False
+                    return
+
+            # Tratamento normal para outros placeholders
             font_info = None
             if p.runs:
                 font = p.runs[0].font
@@ -264,12 +286,11 @@ def substituir_placeholders(doc, contexto):
                 p._element.remove(run._element)
 
             # Processar texto parte por parte
-            texto_restante = texto_modificado
-
+            texto_processado = False
             for key, value in contexto.items():
                 if key in texto_completo:
                     # Dividir o texto em partes: antes, placeholder, depois
-                    partes = texto_restante.split(str(value), 1)
+                    partes = texto_modificado.split(str(value), 1)
                     if len(partes) == 2:
                         # Parte antes do valor substituído (manter formatação original)
                         if partes[0]:
@@ -306,10 +327,11 @@ def substituir_placeholders(doc, contexto):
                                 run_depois.font.italic = font_info['italic']
                                 run_depois.underline = font_info['underline']
 
+                        texto_processado = True
                         break
 
             # Se não conseguiu dividir corretamente, usar método simples
-            if not p.runs:
+            if not texto_processado:
                 new_run = p.add_run(texto_modificado)
                 if font_info:
                     if font_info['name']:
@@ -360,22 +382,35 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # Processar medições
+    # FORMATAÇÃO ULTRA LIMPA DAS MEDIÇÕES - Versão final
     medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
     medicoes_formatadas = []
-    max_len = 0
-    if medicoes_ordenadas:
-        max_len = max(len(med.get('agent', '')) for med in medicoes_ordenadas)
 
     for med in medicoes_ordenadas:
-        agente = med.get('agent', 'N/A')
-        valor = med.get('value', 'N/A')
-        unidade = med.get('unit', '')
-        epi = med.get('epi', '')
-        padding = ' ' * (max_len - len(agente))
-        epi_info = f" | EPI: {epi}" if epi and epi.strip() else ""
-        medicoes_formatadas.append(f"{agente}:{padding}\t{valor} {unidade}{epi_info}")
+        # Limpar todos os valores
+        agente = str(med.get('agent', 'N/A')).strip()
+        valor = str(med.get('value', 'N/A')).strip()
+        unidade = str(med.get('unit', '')).strip()
+        epi = str(med.get('epi', '')).strip()
 
+        # Remover valores vazios ou inválidos
+        if valor in ['', 'N/A', 'nan', 'None']:
+            valor = 'N/A'
+
+        # Construir linha super limpa
+        linha_medicao = f"{agente}: {valor}"
+
+        # Adicionar unidade somente se for válida
+        if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
+            linha_medicao += f" {unidade}"
+
+        # Adicionar EPI somente se for válido
+        if epi and epi not in ['', 'N/A', 'nan', 'None']:
+            linha_medicao += f" | EPI: {epi}"
+
+        medicoes_formatadas.append(linha_medicao)
+
+    # Criar texto final das medições
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
     # Processar data de admissão com melhor tratamento
