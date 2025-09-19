@@ -234,14 +234,95 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders com formatação definitiva.
-    Garante Segoe UI tamanho 9 e espaçamento correto.
+    Substitui placeholders usando tabela invisível para medições.
+    Garante alinhamento perfeito sem quebrar layout.
     """
+    from docx.oxml.shared import parse_xml
+    from docx.shared import Pt
+
     def aplicar_formatacao_padrao(run):
-        """Aplica formatação padrão Segoe UI 9pt"""
+        """Aplica formatação Segoe UI 9pt"""
         run.font.name = 'Segoe UI'
         run.font.size = Pt(9)
         return run
+
+    def criar_tabela_invisivel_medicoes(doc, medicoes_texto):
+        """Cria tabela invisível para medições"""
+        if not medicoes_texto or medicoes_texto == "Não aplicável":
+            return None
+
+        # Parsear linhas de medições
+        linhas = medicoes_texto.split("\n")
+        medicoes_dados = []
+
+        for linha in linhas:
+            if ":" in linha:
+                partes = linha.split(":", 1)
+                if len(partes) == 2:
+                    agente = partes[0].strip()
+                    resto = partes[1].strip()
+
+                    # Separar valor/unidade do EPI se houver
+                    if " | EPI:" in resto:
+                        valor_unidade, epi = resto.split(" | EPI:", 1)
+                        medicoes_dados.append({
+                            'agente': agente,
+                            'valor_unidade': valor_unidade.strip(),
+                            'epi': epi.strip()
+                        })
+                    else:
+                        medicoes_dados.append({
+                            'agente': agente,
+                            'valor_unidade': resto,
+                            'epi': ''
+                        })
+
+        if not medicoes_dados:
+            return None
+
+        # Criar tabela invisível
+        table = doc.add_table(rows=len(medicoes_dados), cols=2)
+        table.autofit = False
+
+        # Configurar larguras das colunas
+        table.columns[0].width = Pt(150)  # Coluna do agente
+        table.columns[1].width = Pt(100)  # Coluna do valor
+
+        # Tornar bordas invisíveis e aplicar formatação
+        for i, medicao in enumerate(medicoes_dados):
+            # Célula do agente (coluna 1)
+            cell_agente = table.cell(i, 0)
+            cell_agente.text = f"{medicao['agente']}:"
+
+            # Célula do valor (coluna 2) 
+            cell_valor = table.cell(i, 1)
+            texto_valor = medicao['valor_unidade']
+            if medicao['epi']:
+                texto_valor += f" | EPI: {medicao['epi']}"
+            cell_valor.text = texto_valor
+
+            # Aplicar formatação Segoe UI 9pt em ambas as células
+            for cell in [cell_agente, cell_valor]:
+                # Remover bordas
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = parse_xml(r'<w:tcBorders xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/></w:tcBorders>')
+                tcPr.append(tcBorders)
+
+                # Formatação dos parágrafos
+                for paragraph in cell.paragraphs:
+                    paragraph.paragraph_format.space_before = Pt(0)
+                    paragraph.paragraph_format.space_after = Pt(0)
+                    paragraph.paragraph_format.line_spacing = 1.0
+
+                    for run in paragraph.runs:
+                        aplicar_formatacao_padrao(run)
+                        if cell == cell_agente:
+                            run.font.bold = True  # Agente em negrito
+                        else:
+                            run.font.bold = False  # Valor sem negrito
+
+        return table
 
     def processar_paragrafo(p):
         texto_completo = p.text
@@ -253,34 +334,23 @@ def substituir_placeholders(doc, contexto):
                 texto_modificado = texto_modificado.replace(key, str(value))
 
         if texto_modificado != texto_completo:
-            # Tratamento ESPECIAL para medições
+            # Tratamento ESPECIAL para medições - usar tabela invisível
             if "[MEDIÇÕES]" in texto_completo:
                 medicoes_valor = contexto.get("[MEDIÇÕES]", "")
+
+                # Limpar o parágrafo atual
+                for run in p.runs[:]:
+                    p._element.remove(run._element)
+
                 if medicoes_valor and medicoes_valor != "Não aplicável":
-                    # Limpar o parágrafo
-                    for run in p.runs[:]:
-                        p._element.remove(run._element)
-
-                    # Inserir cada medição como linha simples
-                    linhas = medicoes_valor.split("\n")
-                    for i, linha in enumerate(linhas):
-                        if linha.strip():
-                            if i > 0:
-                                p.add_run().add_break()
-
-                            # Adicionar a medição com formatação correta
-                            run_medicao = p.add_run(linha.strip())
-                            aplicar_formatacao_padrao(run_medicao)
-                            run_medicao.font.bold = False
-                    return
+                    # Inserir tabela invisível após este parágrafo
+                    criar_tabela_invisivel_medicoes(p._element.getparent().getparent(), medicoes_valor)
                 else:
-                    # Se não há medições, inserir "Não aplicável"
-                    for run in p.runs[:]:
-                        p._element.remove(run._element)
+                    # Se não há medições
                     run_na = p.add_run("Não aplicável")
                     aplicar_formatacao_padrao(run_na)
                     run_na.font.bold = False
-                    return
+                return
 
             # Tratamento normal para outros placeholders
             font_info = None
@@ -302,7 +372,7 @@ def substituir_placeholders(doc, contexto):
                 if key in texto_completo:
                     partes = texto_modificado.split(str(value), 1)
                     if len(partes) == 2:
-                        # Parte antes (rótulo - manter negrito)
+                        # Parte antes (rótulo)
                         if partes[0]:
                             run_antes = aplicar_formatacao_padrao(p.add_run(partes[0]))
                             if font_info:
@@ -310,14 +380,14 @@ def substituir_placeholders(doc, contexto):
                                 run_antes.font.italic = font_info['italic']
                                 run_antes.underline = font_info['underline']
 
-                        # Valor substituído (sem negrito)
+                        # Valor substituído
                         run_valor = aplicar_formatacao_padrao(p.add_run(str(value)))
                         run_valor.font.bold = False
                         if font_info:
                             run_valor.font.italic = font_info['italic']
                             run_valor.underline = font_info['underline']
 
-                        # Parte depois (manter formatação)
+                        # Parte depois
                         if partes[1]:
                             run_depois = aplicar_formatacao_padrao(p.add_run(partes[1]))
                             if font_info:
@@ -373,7 +443,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # FORMATAÇÃO DEFINITIVA - Ultra simples das medições
+    # FORMATAÇÃO PARA TABELA INVISÍVEL - Dados preparados para tabela
     medicoes_formatadas = []
 
     for med in medicoes_manuais:
@@ -383,9 +453,9 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         unidade = str(med.get('unit', '')).strip()
         epi = str(med.get('epi', '')).strip()
 
-        # Validar se há dados válidos
+        # Validar dados
         if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
-            # Formato ULTRA SIMPLES: apenas "Agente: Valor Unidade"
+            # Formato para tabela: "Agente: Valor Unidade"
             linha = f"{agente}: {valor}"
 
             if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
@@ -396,7 +466,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
 
             medicoes_formatadas.append(linha)
 
-    # Criar texto das medições
+    # Criar texto das medições (será usado pela tabela invisível)
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
     # Processar data de admissão
@@ -432,7 +502,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
 
-    # Contexto final
+    # Contexto (medições serão processadas como tabela)
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
         "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
@@ -452,7 +522,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
         "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
         "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
-        "[MEDIÇÕES]": medicoes_texto,
+        "[MEDIÇÕES]": medicoes_texto,  # Será processado como tabela invisível
     }
 
     substituir_placeholders(doc, contexto)
