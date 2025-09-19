@@ -234,9 +234,12 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders de forma ULTRA SIMPLES.
-    Formato das medições: "Agente: Valor Unidade"
+    Substitui placeholders com ALINHAMENTO CORRETO.
+    Força alinhamento à esquerda para medições.
     """
+    from docx.shared import Pt
+    from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
@@ -252,6 +255,12 @@ def substituir_placeholders(doc, contexto):
 
                     # Se mudou, recriar o parágrafo
                     if texto_modificado != full_text:
+                        # CORREÇÃO ESPECIAL PARA MEDIÇÕES
+                        if "[MEDIÇÕES]" in full_text:
+                            # Forçar alinhamento à esquerda
+                            p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+                            print(f"✅ Alinhamento à esquerda aplicado para medições")
+
                         # Salvar formatação original
                         font_info = None
                         if p.runs:
@@ -270,13 +279,11 @@ def substituir_placeholders(doc, contexto):
                         # Criar novo run
                         new_run = p.add_run(texto_modificado)
 
-                        # Aplicar formatação
-                        if font_info:
-                            if font_info['name']:
-                                new_run.font.name = font_info['name']
-                            if font_info['size']:
-                                new_run.font.size = font_info['size']
-                            new_run.font.bold = False  # SEM NEGRITO para valores
+                        # Aplicar formatação Segoe UI 9pt
+                        new_run.font.name = 'Segoe UI'
+                        new_run.font.size = Pt(9)
+                        new_run.font.bold = False
+                        if font_info and font_info['italic']:
                             new_run.font.italic = font_info['italic']
 
     # Processar parágrafos fora de tabelas
@@ -292,6 +299,12 @@ def substituir_placeholders(doc, contexto):
 
         # Se mudou, recriar o parágrafo
         if texto_modificado != full_text:
+            # CORREÇÃO ESPECIAL PARA MEDIÇÕES
+            if "[MEDIÇÕES]" in full_text:
+                # Forçar alinhamento à esquerda
+                p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+                print(f"✅ Alinhamento à esquerda aplicado para medições")
+
             # Salvar formatação original
             font_info = None
             if p.runs:
@@ -310,13 +323,11 @@ def substituir_placeholders(doc, contexto):
             # Criar novo run
             new_run = p.add_run(texto_modificado)
 
-            # Aplicar formatação
-            if font_info:
-                if font_info['name']:
-                    new_run.font.name = font_info['name']
-                if font_info['size']:
-                    new_run.font.size = font_info['size']
-                new_run.font.bold = False  # SEM NEGRITO para valores
+            # Aplicar formatação Segoe UI 9pt
+            new_run.font.name = 'Segoe UI'
+            new_run.font.size = Pt(9)
+            new_run.font.bold = False
+            if font_info and font_info['italic']:
                 new_run.font.italic = font_info['italic']
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
@@ -348,7 +359,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # FORMATAÇÃO ULTRA SIMPLES DAS MEDIÇÕES
+    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
     medicoes_formatadas = []
 
     for med in medicoes_manuais:
@@ -357,22 +368,19 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         unidade = str(med.get('unit', '')).strip()
         epi = str(med.get('epi', '')).strip()
 
-        # Validar dados básicos
         if agente and valor and agente not in ['N/A', 'nan', 'None'] and valor not in ['N/A', 'nan', 'None']:
-            # Formato ULTRA SIMPLES: "Agente: Valor Unidade"
+            # Formato simples: "Agente: Valor Unidade"
             linha = f"{agente}: {valor}"
 
-            # Adicionar unidade se existir
             if unidade and unidade not in ['N/A', 'nan', 'None', '']:
                 linha += f" {unidade}"
 
-            # Adicionar EPI se existir
             if epi and epi not in ['N/A', 'nan', 'None', '']:
                 linha += f" | EPI: {epi}"
 
             medicoes_formatadas.append(linha)
 
-    # Criar texto final SIMPLES
+    # Texto final
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
     # Processar data de admissão
@@ -408,7 +416,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
 
-    # Contexto SIMPLES
+    # Contexto
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
         "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
