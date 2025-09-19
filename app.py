@@ -12,23 +12,27 @@ import time
 import re
 import sys
 import os
+import datetime
 
 # Adicionar o diretório atual ao path para importar módulos locais
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Tentar importar módulos do banco de dados, se não conseguir, usar sistema simplificado
 try:
     from database.models import DatabaseManager
     from database.auth import AuthManager
     from database.user_data import UserDataManager
+    USE_DATABASE = True
 except ImportError:
-    st.error("❌ Erro ao importar módulos do banco de dados. Verifique se as dependências estão instaladas.")
-    st.stop()
+    USE_DATABASE = False
+    st.warning("⚠️ Sistema funcionando no modo simplificado (sem banco de dados)")
 
 # --- Configuração da Página ---
 st.set_page_config(
     page_title="Gerador de Ordens de Serviço (OS)",
     page_icon="📄",
     layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # --- DEFINIÇÃO DE CONSTANTES GLOBAIS ---
@@ -234,141 +238,389 @@ CATEGORIAS_RISCO = {
 }
 
 # --- Inicialização dos Gerenciadores ---
-@st.cache_resource
-def init_managers():
-    try:
-        db_manager = DatabaseManager()
-        auth_manager = AuthManager(db_manager)
-        user_data_manager = UserDataManager(db_manager)
-        return db_manager, auth_manager, user_data_manager
-    except Exception as e:
-        st.error(f"❌ Erro ao inicializar gerenciadores: {str(e)}")
-        return None, None, None
+if USE_DATABASE:
+    @st.cache_resource
+    def init_managers():
+        try:
+            db_manager = DatabaseManager()
+            auth_manager = AuthManager(db_manager)
+            user_data_manager = UserDataManager(db_manager)
+            return db_manager, auth_manager, user_data_manager
+        except Exception as e:
+            st.error(f"❌ Erro ao inicializar gerenciadores: {str(e)}")
+            return None, None, None
 
-db_manager, auth_manager, user_data_manager = init_managers()
+    db_manager, auth_manager, user_data_manager = init_managers()
+else:
+    db_manager, auth_manager, user_data_manager = None, None, None
 
-if not all([db_manager, auth_manager, user_data_manager]):
-    st.error("❌ Erro crítico: Não foi possível inicializar os gerenciadores do sistema.")
-    st.stop()
-
-# --- CSS PERSONALIZADO ---
+# --- CSS PERSONALIZADO CORRIGIDO ---
 st.markdown("""
 <style>
-    .main {
-        padding-top: 0rem;
-    }
-    
+    /* CORRIGIR BARRA BRANCA DO TOPO */
     .stApp > header {
-        background-color: transparent;
+        background-color: transparent !important;
+        height: 0px !important;
+        position: fixed !important;
+        top: -100px !important;
     }
     
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 0rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
+    /* REMOVER PADDING SUPERIOR */
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+        max-width: 100% !important;
     }
     
+    /* FUNDO PRINCIPAL */
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+    
+    .main {
+        background: transparent !important;
+        padding-top: 0rem !important;
+    }
+    
+    /* TÍTULOS E CABEÇALHOS */
     .login-header {
         text-align: center;
-        color: #1e3a8a;
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin-bottom: 2rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        color: white !important;
+        font-size: 2.8rem !important;
+        font-weight: bold !important;
+        margin-bottom: 2rem !important;
+        text-shadow: 3px 3px 6px rgba(0,0,0,0.3) !important;
+        padding: 2rem 0 !important;
     }
     
+    /* FORMULÁRIOS DE LOGIN */
     .login-form {
-        max-width: 400px;
-        margin: 0 auto;
-        padding: 2rem;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        border: 1px solid #e5e7eb;
+        max-width: 450px !important;
+        margin: 2rem auto !important;
+        padding: 2.5rem !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 15px !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        backdrop-filter: blur(10px) !important;
     }
     
+    /* MENSAGENS DE STATUS */
     .success-message {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #22c55e;
-        margin: 1rem 0;
-        color: #166534;
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+        padding: 1.2rem !important;
+        border-radius: 10px !important;
+        border-left: 4px solid #22c55e !important;
+        margin: 1rem 0 !important;
+        color: #166534 !important;
+        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2) !important;
     }
     
     .error-message {
-        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #ef4444;
-        margin: 1rem 0;
-        color: #991b1b;
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
+        padding: 1.2rem !important;
+        border-radius: 10px !important;
+        border-left: 4px solid #ef4444 !important;
+        margin: 1rem 0 !important;
+        color: #991b1b !important;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2) !important;
     }
     
-    .info-message {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #3b82f6;
-        margin: 1rem 0;
-        color: #1e40af;
+    .info-message, .new-features {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+        padding: 1.5rem !important;
+        border-radius: 10px !important;
+        border-left: 4px solid #3b82f6 !important;
+        margin: 1rem 0 !important;
+        color: #1e40af !important;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2) !important;
     }
     
+    /* BOTÕES */
     .stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        border: none;
-        padding: 0.75rem 1rem;
-        font-weight: 500;
-        transition: all 0.2s;
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        color: white;
+        width: 100% !important;
+        border-radius: 10px !important;
+        border: none !important;
+        padding: 0.8rem 1.5rem !important;
+        font-weight: 600 !important;
+        font-size: 1.1rem !important;
+        transition: all 0.3s ease !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: white !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4) !important;
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
     }
     
+    /* INPUTS */
+    .stTextInput > div > div > input {
+        border-radius: 8px !important;
+        border: 2px solid #e5e7eb !important;
+        padding: 0.8rem !important;
+        font-size: 1rem !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    }
+    
+    /* TABS */
+    .stTabs > div > div > div > div {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 10px 10px 0 0 !important;
+        padding: 1rem !important;
+    }
+    
+    /* ÁREAS DE UPLOAD */
     .upload-area {
-        border: 2px dashed #3b82f6;
-        border-radius: 10px;
-        padding: 2rem;
-        text-align: center;
-        background-color: #f8fafc;
-        margin: 1rem 0;
+        border: 2px dashed #3b82f6 !important;
+        border-radius: 15px !important;
+        padding: 2.5rem !important;
+        text-align: center !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        margin: 1rem 0 !important;
+        backdrop-filter: blur(10px) !important;
+        transition: all 0.3s ease !important;
     }
     
+    .upload-area:hover {
+        background: rgba(59, 130, 246, 0.05) !important;
+        border-color: #2563eb !important;
+    }
+    
+    /* CARDS DE MÉTRICAS */
     .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        border-top: 3px solid #3b82f6;
+        background: rgba(255, 255, 255, 0.95) !important;
+        padding: 2rem !important;
+        border-radius: 15px !important;
+        text-align: center !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important;
+        border-top: 4px solid #3b82f6 !important;
+        margin: 1rem 0 !important;
+        backdrop-filter: blur(10px) !important;
+        transition: all 0.3s ease !important;
     }
     
-    .risk-category {
-        background: #f8f9ff;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 0.5rem 0;
-        border-left: 3px solid #3b82f6;
+    .metric-card:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 8px 30px rgba(59, 130, 246, 0.2) !important;
     }
     
-    .new-features {
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid #f59e0b;
-        margin: 1rem 0;
-        color: #92400e;
+    /* SIDEBAR */
+    .css-1d391kg {
+        background: rgba(255, 255, 255, 0.95) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    /* REMOVER ESPAÇAMENTOS DESNECESSÁRIOS */
+    .css-18e3th9 {
+        padding-top: 0 !important;
+    }
+    
+    /* EXPANSORES */
+    .streamlit-expanderHeader {
+        background: rgba(248, 250, 252, 0.95) !important;
+        border-radius: 10px !important;
+        border: 1px solid #e5e7eb !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    .streamlit-expanderContent {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid #e5e7eb !important;
+        border-top: none !important;
+        border-radius: 0 0 10px 10px !important;
+        backdrop-filter: blur(10px) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE AUTENTICAÇÃO ---
+# --- SISTEMA DE AUTENTICAÇÃO SIMPLIFICADO ---
+class SimpleAuthManager:
+    def __init__(self):
+        if 'users' not in st.session_state:
+            st.session_state.users = {
+                'admin@teste.com': {
+                    'id': 1,
+                    'password': 'admin123',
+                    'nome': 'Administrador',
+                    'empresa': 'Empresa Teste',
+                    'email': 'admin@teste.com'
+                }
+            }
+    
+    def authenticate(self, email, password):
+        users = st.session_state.users
+        if email in users and users[email]['password'] == password:
+            return users[email]
+        return None
+    
+    def register_user(self, email, password, nome, empresa):
+        if email not in st.session_state.users:
+            user_id = len(st.session_state.users) + 1
+            st.session_state.users[email] = {
+                'id': user_id,
+                'password': password,
+                'nome': nome,
+                'empresa': empresa,
+                'email': email
+            }
+            return user_id
+        return None
+
+class SimpleUserDataManager:
+    def get_user_credits(self, user_id):
+        return 100  # Créditos ilimitados para modo simplificado
+    
+    def debit_credits(self, user_id, amount):
+        return True  # Sempre sucesso no modo simplificado
+
+# --- INICIALIZAR SISTEMA SIMPLIFICADO SE NECESSÁRIO ---
+if not USE_DATABASE:
+    auth_manager = SimpleAuthManager()
+    user_data_manager = SimpleUserDataManager()
+
+# --- FUNÇÕES AUXILIARES ---
+def create_sample_data():
+    """Cria dados de exemplo para demonstração"""
+    sample_data = {
+        'Nome': ['JOÃO SILVA SANTOS', 'MARIA OLIVEIRA COSTA', 'PEDRO ALVES FERREIRA'],
+        'Setor': ['PRODUCAO DE LA DE ACO', 'ADMINISTRACAO DE RH', 'MANUTENCAO QUIMICA'],
+        'Função': ['OPERADOR PRODUCAO I', 'ANALISTA ADM PESSOAL PL', 'MECANICO MANUT II'],
+        'Data de Admissão': ['15/03/2020', '22/08/2019', '10/01/2021'],
+        'Empresa': ['SUA EMPRESA', 'SUA EMPRESA', 'SUA EMPRESA'],
+        'Unidade': ['Matriz', 'Matriz', 'Matriz'],
+        'Descrição de Atividades': [
+            'Operar equipamentos de produção nível I, controlar parâmetros operacionais, realizar inspeções visuais e registrar dados de produção.',
+            'Executar atividades de administração de pessoal, controlar documentos trabalhistas, elaborar relatórios e dar suporte às equipes.',
+            'Executar manutenção preventiva e corretiva em equipamentos, diagnosticar falhas, trocar componentes e registrar intervenções.'
+        ]
+    }
+    return pd.DataFrame(sample_data)
+
+def validate_excel_structure(df):
+    """Valida se a planilha tem a estrutura necessária"""
+    required_columns = ['Nome', 'Setor', 'Função', 'Data de Admissão', 'Empresa', 'Unidade', 'Descrição de Atividades']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    
+    if missing_columns:
+        return False, f"Colunas obrigatórias faltando: {', '.join(missing_columns)}"
+    
+    if df.empty:
+        return False, "A planilha está vazia"
+    
+    return True, "Estrutura válida"
+
+def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventivas, observacoes, template_doc=None):
+    """Gera a Ordem de Serviço com base nos dados fornecidos"""
+    try:
+        if template_doc:
+            doc = template_doc
+        else:
+            doc = Document()
+        
+        if not template_doc:
+            titulo = doc.add_heading('ORDEM DE SERVIÇO', 0)
+            titulo.alignment = 1
+            
+            subtitulo = doc.add_paragraph('Informações sobre Condições de Segurança e Saúde no Trabalho - NR-01')
+            subtitulo.alignment = 1
+            
+            doc.add_paragraph()
+        
+        # Informações do Funcionário
+        info_func = doc.add_paragraph()
+        info_func.add_run(f"Empresa: {dados_funcionario.get('Empresa', '')}\t\t")
+        info_func.add_run(f"Unidade: {dados_funcionario.get('Unidade', '')}")
+        
+        info_func2 = doc.add_paragraph()
+        info_func2.add_run(f"Nome do Funcionário: {dados_funcionario.get('Nome', '')}")
+        
+        info_func3 = doc.add_paragraph()
+        info_func3.add_run(f"Data de Admissão: {dados_funcionario.get('Data de Admissão', '')}")
+        
+        info_func4 = doc.add_paragraph()
+        info_func4.add_run(f"Setor de Trabalho: {dados_funcionario.get('Setor', '')}\t\t")
+        info_func4.add_run(f"Função: {dados_funcionario.get('Função', '')}")
+        
+        doc.add_paragraph()
+        
+        doc.add_heading('TAREFAS DA FUNÇÃO', level=1)
+        doc.add_paragraph(dados_funcionario.get('Descrição de Atividades', 'Atividades relacionadas à função exercida.'))
+        
+        if agentes_risco:
+            doc.add_heading('AGENTES DE RISCOS OCUPACIONAIS', level=1)
+            
+            for categoria, riscos in agentes_risco.items():
+                if riscos:
+                    categoria_titulo = categoria.replace('_', ' ').title()
+                    doc.add_heading(f'Riscos {categoria_titulo}', level=2)
+                    
+                    for risco in riscos:
+                        risco_para = doc.add_paragraph()
+                        risco_para.add_run(f"• {risco['agente']}")
+                        if risco.get('intensidade'):
+                            risco_para.add_run(f": {risco['intensidade']}")
+                        if risco.get('unidade'):
+                            risco_para.add_run(f" {risco['unidade']}")
+        
+        if epis:
+            doc.add_heading('EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL (EPIs)', level=1)
+            for epi in epis:
+                doc.add_paragraph(f"• {epi}", style='List Bullet')
+        
+        if medidas_preventivas:
+            doc.add_heading('MEDIDAS PREVENTIVAS E DE CONTROLE', level=1)
+            for medida in medidas_preventivas:
+                doc.add_paragraph(f"• {medida}", style='List Bullet')
+        
+        doc.add_heading('PROCEDIMENTOS EM SITUAÇÕES DE EMERGÊNCIA', level=1)
+        emergencia_texto = """• Comunique imediatamente o acidente à chefia imediata ou responsável pela área;
+• Preserve as condições do local de acidente até a comunicação com a autoridade competente;
+• Procure atendimento médico no ambulatório da empresa ou serviço médico de emergência;
+• Siga as orientações do Plano de Emergência da empresa;
+• Registre a ocorrência conforme procedimentos estabelecidos."""
+        doc.add_paragraph(emergencia_texto)
+        
+        doc.add_heading('ORIENTAÇÕES SOBRE GRAVE E IMINENTE RISCO', level=1)
+        gir_texto = """• Sempre que constatar condição de grave e iminente risco, interrompa imediatamente as atividades;
+• Comunique de forma urgente ao seu superior hierárquico;
+• Aguarde as providências necessárias e autorização para retorno;
+• É direito do trabalhador recusar-se a trabalhar em condições de risco grave e iminente."""
+        doc.add_paragraph(gir_texto)
+        
+        if observacoes:
+            doc.add_heading('OBSERVAÇÕES COMPLEMENTARES', level=1)
+            doc.add_paragraph(observacoes)
+        
+        doc.add_paragraph()
+        nota_legal = doc.add_paragraph()
+        nota_legal.add_run("IMPORTANTE: ").bold = True
+        nota_legal.add_run(
+            "Conforme Art. 158 da CLT e NR-01, o descumprimento das disposições "
+            "sobre segurança e saúde no trabalho sujeita o empregado às penalidades "
+            "legais, inclusive demissão por justa causa."
+        )
+        
+        doc.add_paragraph()
+        doc.add_paragraph("_" * 40 + "\t\t" + "_" * 40)
+        doc.add_paragraph("Funcionário\t\t\t\t\tResponsável pela Área")
+        doc.add_paragraph(f"Data: {datetime.date.today().strftime('%d/%m/%Y')}")
+        
+        return doc
+        
+    except Exception as e:
+        st.error(f"Erro ao gerar documento: {str(e)}")
+        return None
+
+# --- FUNÇÃO DE LOGIN ---
 def show_login_page():
     st.markdown("""
     <div class="login-header">
@@ -376,22 +628,20 @@ def show_login_page():
     </div>
     """, unsafe_allow_html=True)
     
-    # Informações sobre novidades
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     st.markdown(f"""
     <div class="new-features">
-        <strong>🆕 NOVIDADES DO SISTEMA - Atualização Especial!</strong><br><br>
-        ✨ <strong>Base de Riscos Expandida:</strong> {total_riscos} opções de riscos ocupacionais!<br>
-        🏃 <strong>Riscos Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas (NOVO!)<br>
-        ⚠️ <strong>Riscos de Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas (NOVO!)<br>
+        <strong>🆕 SISTEMA ATUALIZADO - Base Expandida de Riscos!</strong><br><br>
+        ✨ <strong>{total_riscos} opções</strong> de riscos ocupacionais organizados em 5 categorias<br>
+        🏃 <strong>Riscos Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas<br>
+        ⚠️ <strong>Riscos de Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas<br>
         🔥 <strong>Riscos Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
         ⚗️ <strong>Riscos Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
         🦠 <strong>Riscos Biológicos:</strong> {len(RISCOS_BIOLOGICO)} opções incluindo COVID-19<br><br>
-        📄 Sistema profissional para geração de OS conforme NR-01 com interface otimizada!
+        📄 Sistema profissional conforme NR-01 com interface otimizada!
     </div>
     """, unsafe_allow_html=True)
     
-    # Tabs para Login e Registro
     login_tab, register_tab = st.tabs(["🔑 Login", "👤 Criar Conta"])
     
     with login_tab:
@@ -399,6 +649,10 @@ def show_login_page():
         
         with st.form("login_form"):
             st.markdown("### 🔑 Faça seu Login")
+            
+            if not USE_DATABASE:
+                st.info("**💡 Modo Demo:** Use `admin@teste.com` / `admin123`")
+            
             email = st.text_input("📧 Email:", placeholder="seu@email.com")
             password = st.text_input("🔒 Senha:", type="password", placeholder="Sua senha")
             
@@ -407,7 +661,11 @@ def show_login_page():
             if login_button:
                 if email and password:
                     try:
-                        user = auth_manager.login(email, password)
+                        if USE_DATABASE:
+                            user = auth_manager.login(email, password)
+                        else:
+                            user = auth_manager.authenticate(email, password)
+                        
                         if user:
                             st.session_state.user = user
                             st.session_state.authenticated = True
@@ -450,7 +708,11 @@ def show_login_page():
                     if password == password_confirm:
                         if len(password) >= 6:
                             try:
-                                user_id = auth_manager.register(email, password, nome, empresa)
+                                if USE_DATABASE:
+                                    user_id = auth_manager.register(email, password, nome, empresa)
+                                else:
+                                    user_id = auth_manager.register_user(email, password, nome, empresa)
+                                
                                 if user_id:
                                     st.success("✅ Conta criada com sucesso! Faça login para continuar.")
                                 else:
@@ -477,8 +739,8 @@ def show_main_app(user):
         try:
             credits = user_data_manager.get_user_credits(user['id'])
             st.metric("💳 Créditos", credits)
-        except Exception as e:
-            st.metric("💳 Créditos", "Erro")
+        except:
+            st.metric("💳 Créditos", "∞")
     
     with col3:
         if st.button("🚪 Logout", use_container_width=True):
@@ -488,21 +750,20 @@ def show_main_app(user):
     
     st.markdown(f"🏢 **Empresa:** {user['empresa']}")
     
-    # Novidades expandidas
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     st.markdown(f"""
     <div class="new-features">
         <strong>🚀 SISTEMA ATUALIZADO - Nova Base de Riscos!</strong><br><br>
         📊 <strong>Total:</strong> {total_riscos} opções de riscos ocupacionais organizados em 5 categorias<br>
-        🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} riscos (assédio, postura, repetitividade, etc.)<br>
-        ⚠️ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} riscos (quedas, choques, cortes, etc.)<br>
-        🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} riscos (ruído, vibração, temperatura, etc.)<br>
-        ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} riscos (gases, vapores, poeiras, etc.)<br>
-        🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} riscos (vírus, bactérias, COVID-19, etc.)
+        🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} riscos específicos<br>
+        ⚠️ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} riscos detalhados<br>
+        🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} riscos ampliados<br>
+        ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
+        🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19
     </div>
     """, unsafe_allow_html=True)
     
-    # Sidebar com estatísticas expandidas
+    # Sidebar com informações
     with st.sidebar:
         st.markdown("### 📊 Base de Riscos Expandida")
         st.markdown(f"**Total: {total_riscos} opções**")
@@ -516,24 +777,36 @@ def show_main_app(user):
         st.markdown(f"**Nome:** {user['nome']}")
         st.markdown(f"**Email:** {user['email']}")
         st.markdown(f"**Empresa:** {user['empresa']}")
+        
         try:
             credits = user_data_manager.get_user_credits(user['id'])
             st.markdown(f"**Créditos:** {credits}")
-        except Exception as e:
-            st.markdown(f"**Créditos:** Erro ao carregar")
+        except:
+            st.markdown(f"**Créditos:** ∞ (Modo demo)")
         
         st.markdown("---")
         st.markdown("### 📋 Estrutura da Planilha")
         st.markdown("""
         **Colunas obrigatórias:**
-        - Nome
-        - Setor
-        - Função
+        - Nome, Setor, Função
         - Data de Admissão
-        - Empresa
-        - Unidade
+        - Empresa, Unidade  
         - Descrição de Atividades
         """)
+        
+        # Botão para baixar planilha exemplo
+        sample_df = create_sample_data()
+        sample_buffer = BytesIO()
+        sample_df.to_excel(sample_buffer, index=False)
+        sample_buffer.seek(0)
+        
+        st.download_button(
+            "📥 Baixar Planilha Exemplo",
+            data=sample_buffer.getvalue(),
+            file_name="modelo_funcionarios.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
     
     # Seção de upload de arquivos
     st.markdown("## 📤 Upload de Arquivos")
@@ -572,13 +845,10 @@ def show_main_app(user):
     if uploaded_excel is not None:
         try:
             df = pd.read_excel(uploaded_excel)
+            is_valid, message = validate_excel_structure(df)
             
-            # Validação básica da planilha
-            required_columns = ['Nome', 'Setor', 'Função']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            
-            if missing_columns:
-                st.error(f"❌ Colunas obrigatórias faltando: {', '.join(missing_columns)}")
+            if not is_valid:
+                st.error(f"❌ {message}")
                 return
             
             st.success(f"✅ Planilha carregada: {len(df)} funcionários encontrados")
@@ -656,7 +926,7 @@ def show_main_app(user):
                     df_filtrado['Nome'].tolist()
                 )
             
-            else:  # Todos do setor
+            else:
                 funcionarios_selecionados = df_filtrado['Nome'].tolist()
                 if funcionarios_selecionados:
                     st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários do setor.")
@@ -782,45 +1052,89 @@ def show_main_app(user):
                 # Botão para gerar OS
                 st.markdown("## 🚀 Gerar Ordens de Serviço")
                 
-                # Verificar créditos suficientes
                 creditos_necessarios = len(funcionarios_selecionados)
-                try:
-                    creditos_usuario = user_data_manager.get_user_credits(user['id'])
-                except Exception as e:
-                    creditos_usuario = 0
-                    st.error(f"❌ Erro ao verificar créditos: {str(e)}")
                 
-                if creditos_usuario >= creditos_necessarios:
-                    if st.button(f"📄 GERAR {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)", type="primary", use_container_width=True):
+                if st.button(f"📄 GERAR {len(funcionarios_selecionados)} OS", type="primary", use_container_width=True):
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    documentos_gerados = []
+                    
+                    # Processar cada funcionário selecionado
+                    for idx, nome_funcionario in enumerate(funcionarios_selecionados):
+                        status_text.text(f"🔄 Gerando OS para: {nome_funcionario}")
                         
-                        # Simular geração de documentos
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
+                        # Buscar dados do funcionário
+                        dados_funcionario = df_filtrado[df_filtrado['Nome'] == nome_funcionario].iloc[0].to_dict()
                         
-                        # Processar cada funcionário
-                        for idx, nome_funcionario in enumerate(funcionarios_selecionados):
-                            status_text.text(f"🔄 Processando: {nome_funcionario}")
-                            progress_bar.progress((idx + 1) / len(funcionarios_selecionados))
-                            time.sleep(0.5)  # Simular processamento
+                        # Gerar documento
+                        doc = gerar_documento_os(
+                            dados_funcionario=dados_funcionario,
+                            agentes_risco=st.session_state.agentes_risco,
+                            epis=st.session_state.epis_selecionados,
+                            medidas_preventivas=st.session_state.medidas_preventivas,
+                            observacoes=observacoes,
+                            template_doc=uploaded_template
+                        )
                         
-                        # Debitar créditos
-                        try:
-                            user_data_manager.debit_credits(user['id'], creditos_necessarios)
-                        except Exception as e:
-                            st.error(f"❌ Erro ao debitar créditos: {str(e)}")
+                        if doc:
+                            # Salvar documento em buffer
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+                            
+                            documentos_gerados.append({
+                                'nome': nome_funcionario.replace(' ', '_').replace('/', '_'),
+                                'buffer': buffer
+                            })
                         
-                        status_text.text("✅ Processamento concluído!")
-                        st.success(f"✅ {len(funcionarios_selecionados)} OS geradas com sucesso!")
-                        st.info(f"💳 {creditos_necessarios} créditos foram debitados da sua conta.")
-                        
-                        # Aqui seria implementada a lógica real de geração dos documentos
-                        # Por agora, apenas simulamos o processo
-                        
-                        time.sleep(2)
-                        st.rerun()
-                else:
-                    st.warning(f"⚠️ Créditos insuficientes. Você precisa de {creditos_necessarios} créditos, mas possui apenas {creditos_usuario}.")
-                    st.info("💳 Entre em contato com o administrador para adquirir mais créditos.")
+                        # Atualizar progresso
+                        progress_bar.progress((idx + 1) / len(funcionarios_selecionados))
+                        time.sleep(0.3)
+                    
+                    # Debitar créditos
+                    try:
+                        user_data_manager.debit_credits(user['id'], creditos_necessarios)
+                    except:
+                        pass  # Ignorar erro no modo simplificado
+                    
+                    status_text.text("✅ Geração concluída!")
+                    
+                    # Disponibilizar downloads
+                    if documentos_gerados:
+                        if len(documentos_gerados) == 1:
+                            st.success(f"✅ Ordem de Serviço gerada com sucesso!")
+                            st.download_button(
+                                label="📥 Download da Ordem de Serviço",
+                                data=documentos_gerados[0]['buffer'].getvalue(),
+                                file_name=f"OS_{documentos_gerados[0]['nome']}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                use_container_width=True
+                            )
+                        else:
+                            st.success(f"✅ {len(documentos_gerados)} Ordens de Serviço geradas com sucesso!")
+                            
+                            # Criar arquivo ZIP
+                            zip_buffer = BytesIO()
+                            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                                for doc_info in documentos_gerados:
+                                    zip_file.writestr(
+                                        f"OS_{doc_info['nome']}.docx",
+                                        doc_info['buffer'].getvalue()
+                                    )
+                            
+                            zip_buffer.seek(0)
+                            
+                            st.download_button(
+                                label=f"📥 Download de {len(documentos_gerados)} Ordens de Serviço (ZIP)",
+                                data=zip_buffer.getvalue(),
+                                file_name=f"Lote_OS_{datetime.date.today().strftime('%d%m%Y')}.zip",
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+                    else:
+                        st.error("❌ Erro: Nenhum documento foi gerado. Verifique as configurações.")
         
         except Exception as e:
             st.error(f"❌ Erro ao processar planilha: {str(e)}")
@@ -843,16 +1157,14 @@ def show_main_app(user):
         </div>
         """, unsafe_allow_html=True)
 
-# --- LÓGICA PRINCIPAL DA APLICAÇÃO ---
+# --- LÓGICA PRINCIPAL ---
 def main():
-    # Verificar se o usuário está autenticado
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
     
     if 'user' not in st.session_state:
         st.session_state.user = None
     
-    # Mostrar página apropriada
     if st.session_state.authenticated and st.session_state.user:
         show_main_app(st.session_state.user)
     else:
