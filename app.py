@@ -1,6 +1,4 @@
-# 🔐 Acesso ao Sistema
-
-# Faça login ou registre-se para acessar o Gerador de OS
+# 🔐 Gerador de Ordens de Serviço (OS)
 
 import streamlit as st
 import pandas as pd
@@ -13,19 +11,7 @@ import re
 import sys
 import os
 import datetime
-
-# Adicionar o diretório atual ao path para importar módulos locais
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Tentar importar módulos do banco de dados, se não conseguir, usar sistema simplificado
-try:
-    from database.models import DatabaseManager
-    from database.auth import AuthManager
-    from database.user_data import UserDataManager
-    USE_DATABASE = True
-except ImportError:
-    USE_DATABASE = False
-    st.warning("⚠️ Sistema funcionando no modo simplificado (sem banco de dados)")
+import hashlib
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -217,9 +203,6 @@ RISCOS_ACIDENTE = sorted([
     "Vidro (recipientes, portas, bancadas, janelas, objetos diversos)"
 ])
 
-# Lista completa de agentes de risco (compatibilidade com código existente)
-AGENTES_DE_RISCO = sorted(RISCOS_FISICO + RISCOS_QUIMICO + RISCOS_BIOLOGICO + RISCOS_ERGONOMICO + RISCOS_ACIDENTE)
-
 # Dicionário para mapear categorias aos riscos
 AGENTES_POR_CATEGORIA = {
     'fisico': RISCOS_FISICO,
@@ -237,259 +220,259 @@ CATEGORIAS_RISCO = {
     'acidente': '⚠️ Acidentes'
 }
 
-# --- Inicialização dos Gerenciadores ---
-if USE_DATABASE:
-    @st.cache_resource
-    def init_managers():
-        try:
-            db_manager = DatabaseManager()
-            auth_manager = AuthManager(db_manager)
-            user_data_manager = UserDataManager(db_manager)
-            return db_manager, auth_manager, user_data_manager
-        except Exception as e:
-            st.error(f"❌ Erro ao inicializar gerenciadores: {str(e)}")
-            return None, None, None
-
-    db_manager, auth_manager, user_data_manager = init_managers()
-else:
-    db_manager, auth_manager, user_data_manager = None, None, None
-
-# --- CSS PERSONALIZADO CORRIGIDO ---
+# --- CSS PERSONALIZADO LIMPO ---
 st.markdown("""
 <style>
-    /* CORRIGIR BARRA BRANCA DO TOPO */
-    .stApp > header {
-        background-color: transparent !important;
-        height: 0px !important;
-        position: fixed !important;
-        top: -100px !important;
-    }
-    
-    /* REMOVER PADDING SUPERIOR */
-    .main .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 0rem !important;
-        max-width: 100% !important;
-    }
-    
-    /* FUNDO PRINCIPAL */
+    /* TEMA DARK MODERNO */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: #1a1a2e;
+        color: #ffffff;
     }
     
     .main {
-        background: transparent !important;
-        padding-top: 0rem !important;
+        background: #1a1a2e;
+        color: #ffffff;
     }
     
-    /* TÍTULOS E CABEÇALHOS */
-    .login-header {
+    /* OCULTAR HEADER COMPLETAMENTE */
+    header[data-testid="stHeader"] {
+        height: 0px;
+        max-height: 0px;
+        overflow: hidden;
+    }
+    
+    .main .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    
+    /* TÍTULO PRINCIPAL */
+    .title-header {
         text-align: center;
-        color: white !important;
-        font-size: 2.8rem !important;
-        font-weight: bold !important;
-        margin-bottom: 2rem !important;
-        text-shadow: 3px 3px 6px rgba(0,0,0,0.3) !important;
-        padding: 2rem 0 !important;
+        color: #4CAF50;
+        font-size: 3rem;
+        font-weight: bold;
+        margin: 2rem 0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
     
-    /* FORMULÁRIOS DE LOGIN */
-    .login-form {
-        max-width: 450px !important;
-        margin: 2rem auto !important;
-        padding: 2.5rem !important;
-        background: rgba(255, 255, 255, 0.95) !important;
-        border-radius: 15px !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        backdrop-filter: blur(10px) !important;
+    /* FORMULÁRIO DE LOGIN */
+    .login-container {
+        max-width: 500px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background: #16213e;
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        border: 1px solid #0f3460;
     }
     
-    /* MENSAGENS DE STATUS */
-    .success-message {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
-        padding: 1.2rem !important;
-        border-radius: 10px !important;
-        border-left: 4px solid #22c55e !important;
-        margin: 1rem 0 !important;
-        color: #166534 !important;
-        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2) !important;
-    }
-    
-    .error-message {
-        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
-        padding: 1.2rem !important;
-        border-radius: 10px !important;
-        border-left: 4px solid #ef4444 !important;
-        margin: 1rem 0 !important;
-        color: #991b1b !important;
-        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2) !important;
-    }
-    
-    .info-message, .new-features {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
-        padding: 1.5rem !important;
-        border-radius: 10px !important;
-        border-left: 4px solid #3b82f6 !important;
-        margin: 1rem 0 !important;
-        color: #1e40af !important;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2) !important;
+    .login-title {
+        text-align: center;
+        color: #4CAF50;
+        font-size: 2rem;
+        margin-bottom: 2rem;
     }
     
     /* BOTÕES */
     .stButton > button {
-        width: 100% !important;
-        border-radius: 10px !important;
-        border: none !important;
-        padding: 0.8rem 1.5rem !important;
-        font-weight: 600 !important;
-        font-size: 1.1rem !important;
-        transition: all 0.3s ease !important;
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-        color: white !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
+        background: linear-gradient(135deg, #4CAF50, #45a049);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 1.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        width: 100%;
+        transition: all 0.3s ease;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4) !important;
-        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+        background: linear-gradient(135deg, #45a049, #3d8b40);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
     }
     
     /* INPUTS */
     .stTextInput > div > div > input {
-        border-radius: 8px !important;
-        border: 2px solid #e5e7eb !important;
-        padding: 0.8rem !important;
-        font-size: 1rem !important;
-        transition: all 0.3s ease !important;
+        background: #0f1419;
+        color: white;
+        border: 2px solid #0f3460;
+        border-radius: 8px;
+        padding: 0.75rem;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+        border-color: #4CAF50;
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+    
+    /* MENSAGENS */
+    .success-msg {
+        background: rgba(76, 175, 80, 0.1);
+        border: 1px solid #4CAF50;
+        border-radius: 8px;
+        padding: 1rem;
+        color: #4CAF50;
+        margin: 1rem 0;
+    }
+    
+    .error-msg {
+        background: rgba(244, 67, 54, 0.1);
+        border: 1px solid #f44336;
+        border-radius: 8px;
+        padding: 1rem;
+        color: #f44336;
+        margin: 1rem 0;
+    }
+    
+    .info-msg {
+        background: rgba(33, 150, 243, 0.1);
+        border: 1px solid #2196F3;
+        border-radius: 8px;
+        padding: 1rem;
+        color: #2196F3;
+        margin: 1rem 0;
     }
     
     /* TABS */
-    .stTabs > div > div > div > div {
-        background: rgba(255, 255, 255, 0.1) !important;
-        border-radius: 10px 10px 0 0 !important;
-        padding: 1rem !important;
+    .stTabs [data-baseweb="tab-list"] {
+        background: #16213e;
+        border-radius: 10px 10px 0 0;
     }
     
-    /* ÁREAS DE UPLOAD */
-    .upload-area {
-        border: 2px dashed #3b82f6 !important;
-        border-radius: 15px !important;
-        padding: 2.5rem !important;
-        text-align: center !important;
-        background: rgba(255, 255, 255, 0.95) !important;
-        margin: 1rem 0 !important;
-        backdrop-filter: blur(10px) !important;
-        transition: all 0.3s ease !important;
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        color: #ffffff;
     }
     
-    .upload-area:hover {
-        background: rgba(59, 130, 246, 0.05) !important;
-        border-color: #2563eb !important;
-    }
-    
-    /* CARDS DE MÉTRICAS */
-    .metric-card {
-        background: rgba(255, 255, 255, 0.95) !important;
-        padding: 2rem !important;
-        border-radius: 15px !important;
-        text-align: center !important;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important;
-        border-top: 4px solid #3b82f6 !important;
-        margin: 1rem 0 !important;
-        backdrop-filter: blur(10px) !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-5px) !important;
-        box-shadow: 0 8px 30px rgba(59, 130, 246, 0.2) !important;
+    .stTabs [aria-selected="true"] {
+        background: #4CAF50 !important;
+        color: white !important;
     }
     
     /* SIDEBAR */
     .css-1d391kg {
-        background: rgba(255, 255, 255, 0.95) !important;
-        backdrop-filter: blur(10px) !important;
+        background: #16213e;
     }
     
-    /* REMOVER ESPAÇAMENTOS DESNECESSÁRIOS */
-    .css-18e3th9 {
-        padding-top: 0 !important;
+    /* UPLOAD AREAS */
+    .upload-area {
+        background: #16213e;
+        border: 2px dashed #4CAF50;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        margin: 1rem 0;
+        color: white;
+    }
+    
+    /* CARDS */
+    .metric-card {
+        background: #16213e;
+        padding: 1.5rem;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #0f3460;
+        margin: 0.5rem 0;
+    }
+    
+    .metric-card h3 {
+        color: #4CAF50;
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-card p {
+        color: #ffffff;
+        margin: 0;
     }
     
     /* EXPANSORES */
     .streamlit-expanderHeader {
-        background: rgba(248, 250, 252, 0.95) !important;
-        border-radius: 10px !important;
-        border: 1px solid #e5e7eb !important;
-        backdrop-filter: blur(10px) !important;
+        background: #16213e !important;
+        border: 1px solid #0f3460 !important;
+        border-radius: 8px !important;
+        color: white !important;
     }
     
     .streamlit-expanderContent {
-        background: rgba(255, 255, 255, 0.95) !important;
-        border: 1px solid #e5e7eb !important;
-        border-top: none !important;
-        border-radius: 0 0 10px 10px !important;
-        backdrop-filter: blur(10px) !important;
+        background: #1a1a2e !important;
+        border: 1px solid #0f3460 !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # --- SISTEMA DE AUTENTICAÇÃO SIMPLIFICADO ---
-class SimpleAuthManager:
-    def __init__(self):
-        if 'users' not in st.session_state:
-            st.session_state.users = {
-                'admin@teste.com': {
-                    'id': 1,
-                    'password': 'admin123',
-                    'nome': 'Administrador',
-                    'empresa': 'Empresa Teste',
-                    'email': 'admin@teste.com'
-                }
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def initialize_users():
+    if 'users_db' not in st.session_state:
+        st.session_state.users_db = {
+            'admin@teste.com': {
+                'id': 1,
+                'password': hash_password('admin123'),
+                'nome': 'Administrador',
+                'empresa': 'Empresa Teste',
+                'email': 'admin@teste.com',
+                'credits': 1000
+            },
+            'robsonmbf@hotmail.com': {
+                'id': 2,
+                'password': hash_password('123456'),
+                'nome': 'Robson',
+                'empresa': 'Minha Empresa',
+                'email': 'robsonmbf@hotmail.com',
+                'credits': 1000
             }
+        }
+
+def authenticate_user(email, password):
+    initialize_users()
+    hashed_password = hash_password(password)
     
-    def authenticate(self, email, password):
-        users = st.session_state.users
-        if email in users and users[email]['password'] == password:
-            return users[email]
+    if email in st.session_state.users_db:
+        user_data = st.session_state.users_db[email]
+        if user_data['password'] == hashed_password:
+            return user_data
+    return None
+
+def register_user(email, password, nome, empresa):
+    initialize_users()
+    
+    if email in st.session_state.users_db:
         return None
     
-    def register_user(self, email, password, nome, empresa):
-        if email not in st.session_state.users:
-            user_id = len(st.session_state.users) + 1
-            st.session_state.users[email] = {
-                'id': user_id,
-                'password': password,
-                'nome': nome,
-                'empresa': empresa,
-                'email': email
-            }
-            return user_id
-        return None
+    user_id = len(st.session_state.users_db) + 1
+    st.session_state.users_db[email] = {
+        'id': user_id,
+        'password': hash_password(password),
+        'nome': nome,
+        'empresa': empresa,
+        'email': email,
+        'credits': 100
+    }
+    return user_id
 
-class SimpleUserDataManager:
-    def get_user_credits(self, user_id):
-        return 100  # Créditos ilimitados para modo simplificado
-    
-    def debit_credits(self, user_id, amount):
-        return True  # Sempre sucesso no modo simplificado
+def get_user_credits(user_id):
+    initialize_users()
+    for user in st.session_state.users_db.values():
+        if user['id'] == user_id:
+            return user['credits']
+    return 0
 
-# --- INICIALIZAR SISTEMA SIMPLIFICADO SE NECESSÁRIO ---
-if not USE_DATABASE:
-    auth_manager = SimpleAuthManager()
-    user_data_manager = SimpleUserDataManager()
+def debit_credits(user_id, amount):
+    initialize_users()
+    for user in st.session_state.users_db.values():
+        if user['id'] == user_id:
+            user['credits'] = max(0, user['credits'] - amount)
+            return True
+    return False
 
 # --- FUNÇÕES AUXILIARES ---
 def create_sample_data():
-    """Cria dados de exemplo para demonstração"""
     sample_data = {
         'Nome': ['JOÃO SILVA SANTOS', 'MARIA OLIVEIRA COSTA', 'PEDRO ALVES FERREIRA'],
         'Setor': ['PRODUCAO DE LA DE ACO', 'ADMINISTRACAO DE RH', 'MANUTENCAO QUIMICA'],
@@ -506,7 +489,6 @@ def create_sample_data():
     return pd.DataFrame(sample_data)
 
 def validate_excel_structure(df):
-    """Valida se a planilha tem a estrutura necessária"""
     required_columns = ['Nome', 'Setor', 'Função', 'Data de Admissão', 'Empresa', 'Unidade', 'Descrição de Atividades']
     missing_columns = [col for col in required_columns if col not in df.columns]
     
@@ -519,7 +501,6 @@ def validate_excel_structure(df):
     return True, "Estrutura válida"
 
 def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventivas, observacoes, template_doc=None):
-    """Gera a Ordem de Serviço com base nos dados fornecidos"""
     try:
         if template_doc:
             doc = template_doc
@@ -622,71 +603,64 @@ def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventiv
 
 # --- FUNÇÃO DE LOGIN ---
 def show_login_page():
-    st.markdown("""
-    <div class="login-header">
-        🔐 Gerador de Ordens de Serviço (OS)
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="title-header">🔐 Gerador de Ordens de Serviço (OS)</div>', unsafe_allow_html=True)
     
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
+    
     st.markdown(f"""
-    <div class="new-features">
+    <div class="info-msg">
         <strong>🆕 SISTEMA ATUALIZADO - Base Expandida de Riscos!</strong><br><br>
         ✨ <strong>{total_riscos} opções</strong> de riscos ocupacionais organizados em 5 categorias<br>
-        🏃 <strong>Riscos Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas<br>
-        ⚠️ <strong>Riscos de Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas<br>
-        🔥 <strong>Riscos Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
-        ⚗️ <strong>Riscos Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
-        🦠 <strong>Riscos Biológicos:</strong> {len(RISCOS_BIOLOGICO)} opções incluindo COVID-19<br><br>
-        📄 Sistema profissional conforme NR-01 com interface otimizada!
+        🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas<br>
+        ⚠️ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas<br>
+        🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
+        ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
+        🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19<br><br>
+        📄 Sistema profissional conforme NR-01 com interface dark!
     </div>
     """, unsafe_allow_html=True)
     
     login_tab, register_tab = st.tabs(["🔑 Login", "👤 Criar Conta"])
     
     with login_tab:
-        st.markdown('<div class="login-form">', unsafe_allow_html=True)
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">🔑 Faça seu Login</div>', unsafe_allow_html=True)
         
         with st.form("login_form"):
-            st.markdown("### 🔑 Faça seu Login")
-            
-            if not USE_DATABASE:
-                st.info("**💡 Modo Demo:** Use `admin@teste.com` / `admin123`")
+            st.markdown("""
+            <div class="info-msg">
+                <strong>💡 Contas de Teste:</strong><br>
+                • <strong>admin@teste.com</strong> / admin123<br>
+                • <strong>robsonmbf@hotmail.com</strong> / 123456
+            </div>
+            """, unsafe_allow_html=True)
             
             email = st.text_input("📧 Email:", placeholder="seu@email.com")
             password = st.text_input("🔒 Senha:", type="password", placeholder="Sua senha")
             
-            login_button = st.form_submit_button("🚀 Entrar", use_container_width=True)
+            login_button = st.form_submit_button("🚀 Entrar")
             
             if login_button:
                 if email and password:
-                    try:
-                        if USE_DATABASE:
-                            user = auth_manager.login(email, password)
-                        else:
-                            user = auth_manager.authenticate(email, password)
-                        
-                        if user:
-                            st.session_state.user = user
-                            st.session_state.authenticated = True
-                            st.success("✅ Login realizado com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("❌ Email ou senha incorretos.")
-                    except Exception as e:
-                        st.error(f"❌ Erro ao fazer login: {str(e)}")
+                    user = authenticate_user(email, password)
+                    if user:
+                        st.session_state.user = user
+                        st.session_state.authenticated = True
+                        st.markdown('<div class="success-msg">✅ Login realizado com sucesso!</div>', unsafe_allow_html=True)
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.markdown('<div class="error-msg">❌ Email ou senha incorretos.</div>', unsafe_allow_html=True)
                 else:
-                    st.warning("⚠️ Por favor, preencha todos os campos.")
+                    st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
     with register_tab:
-        st.markdown('<div class="login-form">', unsafe_allow_html=True)
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">👤 Criar Nova Conta</div>', unsafe_allow_html=True)
         
         with st.form("register_form"):
-            st.markdown("### 👤 Criar Nova Conta")
-            
             col1, col2 = st.columns(2)
             with col1:
                 nome = st.text_input("👤 Nome:", placeholder="Seu nome completo")
@@ -701,30 +675,23 @@ def show_login_page():
             with col4:
                 password_confirm = st.text_input("🔒 Confirmar:", type="password", placeholder="Confirme a senha")
             
-            register_button = st.form_submit_button("✨ Criar Conta", use_container_width=True)
+            register_button = st.form_submit_button("✨ Criar Conta")
             
             if register_button:
                 if nome and empresa and email and password and password_confirm:
                     if password == password_confirm:
                         if len(password) >= 6:
-                            try:
-                                if USE_DATABASE:
-                                    user_id = auth_manager.register(email, password, nome, empresa)
-                                else:
-                                    user_id = auth_manager.register_user(email, password, nome, empresa)
-                                
-                                if user_id:
-                                    st.success("✅ Conta criada com sucesso! Faça login para continuar.")
-                                else:
-                                    st.error("❌ Erro ao criar conta. Email já pode estar em uso.")
-                            except Exception as e:
-                                st.error(f"❌ Erro: {str(e)}")
+                            user_id = register_user(email, password, nome, empresa)
+                            if user_id:
+                                st.markdown('<div class="success-msg">✅ Conta criada com sucesso! Faça login para continuar.</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown('<div class="error-msg">❌ Erro ao criar conta. Email já pode estar em uso.</div>', unsafe_allow_html=True)
                         else:
-                            st.error("❌ A senha deve ter pelo menos 6 caracteres.")
+                            st.markdown('<div class="error-msg">❌ A senha deve ter pelo menos 6 caracteres.</div>', unsafe_allow_html=True)
                     else:
-                        st.error("❌ As senhas não coincidem.")
+                        st.markdown('<div class="error-msg">❌ As senhas não coincidem.</div>', unsafe_allow_html=True)
                 else:
-                    st.warning("⚠️ Por favor, preencha todos os campos.")
+                    st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -736,14 +703,11 @@ def show_main_app(user):
         st.markdown(f"# 📄 Gerador de OS - Bem-vindo, **{user['nome']}**!")
     
     with col2:
-        try:
-            credits = user_data_manager.get_user_credits(user['id'])
-            st.metric("💳 Créditos", credits)
-        except:
-            st.metric("💳 Créditos", "∞")
+        credits = get_user_credits(user['id'])
+        st.metric("💳 Créditos", credits)
     
     with col3:
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout"):
             st.session_state.authenticated = False
             st.session_state.user = None
             st.rerun()
@@ -752,7 +716,7 @@ def show_main_app(user):
     
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     st.markdown(f"""
-    <div class="new-features">
+    <div class="info-msg">
         <strong>🚀 SISTEMA ATUALIZADO - Nova Base de Riscos!</strong><br><br>
         📊 <strong>Total:</strong> {total_riscos} opções de riscos ocupacionais organizados em 5 categorias<br>
         🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} riscos específicos<br>
@@ -777,12 +741,7 @@ def show_main_app(user):
         st.markdown(f"**Nome:** {user['nome']}")
         st.markdown(f"**Email:** {user['email']}")
         st.markdown(f"**Empresa:** {user['empresa']}")
-        
-        try:
-            credits = user_data_manager.get_user_credits(user['id'])
-            st.markdown(f"**Créditos:** {credits}")
-        except:
-            st.markdown(f"**Créditos:** ∞ (Modo demo)")
+        st.markdown(f"**Créditos:** {credits}")
         
         st.markdown("---")
         st.markdown("### 📋 Estrutura da Planilha")
@@ -848,10 +807,10 @@ def show_main_app(user):
             is_valid, message = validate_excel_structure(df)
             
             if not is_valid:
-                st.error(f"❌ {message}")
+                st.markdown(f'<div class="error-msg">❌ {message}</div>', unsafe_allow_html=True)
                 return
             
-            st.success(f"✅ Planilha carregada: {len(df)} funcionários encontrados")
+            st.markdown(f'<div class="success-msg">✅ Planilha carregada: {len(df)} funcionários encontrados</div>', unsafe_allow_html=True)
             
             # Estatísticas da planilha
             col1, col2, col3, col4 = st.columns(4)
@@ -933,7 +892,7 @@ def show_main_app(user):
             
             # Configuração de riscos se há funcionários selecionados
             if funcionarios_selecionados:
-                st.success(f"✅ {len(funcionarios_selecionados)} funcionário(s) selecionado(s)")
+                st.markdown(f'<div class="success-msg">✅ {len(funcionarios_selecionados)} funcionário(s) selecionado(s)</div>', unsafe_allow_html=True)
                 
                 st.markdown("## ⚠️ Configuração de Riscos Ocupacionais")
                 
@@ -984,7 +943,7 @@ def show_main_app(user):
                                         'unidade': unidade
                                     }
                                     st.session_state.agentes_risco[categoria_key].append(novo_risco)
-                                    st.success(f"✅ Risco adicionado!")
+                                    st.markdown('<div class="success-msg">✅ Risco adicionado!</div>', unsafe_allow_html=True)
                                     st.rerun()
                         
                         # Mostrar riscos adicionados
@@ -1053,97 +1012,101 @@ def show_main_app(user):
                 st.markdown("## 🚀 Gerar Ordens de Serviço")
                 
                 creditos_necessarios = len(funcionarios_selecionados)
+                creditos_usuario = get_user_credits(user['id'])
                 
-                if st.button(f"📄 GERAR {len(funcionarios_selecionados)} OS", type="primary", use_container_width=True):
-                    
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    documentos_gerados = []
-                    
-                    # Processar cada funcionário selecionado
-                    for idx, nome_funcionario in enumerate(funcionarios_selecionados):
-                        status_text.text(f"🔄 Gerando OS para: {nome_funcionario}")
+                if creditos_usuario >= creditos_necessarios:
+                    if st.button(f"📄 GERAR {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)", type="primary"):
                         
-                        # Buscar dados do funcionário
-                        dados_funcionario = df_filtrado[df_filtrado['Nome'] == nome_funcionario].iloc[0].to_dict()
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
                         
-                        # Gerar documento
-                        doc = gerar_documento_os(
-                            dados_funcionario=dados_funcionario,
-                            agentes_risco=st.session_state.agentes_risco,
-                            epis=st.session_state.epis_selecionados,
-                            medidas_preventivas=st.session_state.medidas_preventivas,
-                            observacoes=observacoes,
-                            template_doc=uploaded_template
-                        )
+                        documentos_gerados = []
                         
-                        if doc:
-                            # Salvar documento em buffer
-                            buffer = BytesIO()
-                            doc.save(buffer)
-                            buffer.seek(0)
+                        # Processar cada funcionário selecionado
+                        for idx, nome_funcionario in enumerate(funcionarios_selecionados):
+                            status_text.text(f"🔄 Gerando OS para: {nome_funcionario}")
                             
-                            documentos_gerados.append({
-                                'nome': nome_funcionario.replace(' ', '_').replace('/', '_'),
-                                'buffer': buffer
-                            })
-                        
-                        # Atualizar progresso
-                        progress_bar.progress((idx + 1) / len(funcionarios_selecionados))
-                        time.sleep(0.3)
-                    
-                    # Debitar créditos
-                    try:
-                        user_data_manager.debit_credits(user['id'], creditos_necessarios)
-                    except:
-                        pass  # Ignorar erro no modo simplificado
-                    
-                    status_text.text("✅ Geração concluída!")
-                    
-                    # Disponibilizar downloads
-                    if documentos_gerados:
-                        if len(documentos_gerados) == 1:
-                            st.success(f"✅ Ordem de Serviço gerada com sucesso!")
-                            st.download_button(
-                                label="📥 Download da Ordem de Serviço",
-                                data=documentos_gerados[0]['buffer'].getvalue(),
-                                file_name=f"OS_{documentos_gerados[0]['nome']}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                use_container_width=True
+                            # Buscar dados do funcionário
+                            dados_funcionario = df_filtrado[df_filtrado['Nome'] == nome_funcionario].iloc[0].to_dict()
+                            
+                            # Gerar documento
+                            doc = gerar_documento_os(
+                                dados_funcionario=dados_funcionario,
+                                agentes_risco=st.session_state.agentes_risco,
+                                epis=st.session_state.epis_selecionados,
+                                medidas_preventivas=st.session_state.medidas_preventivas,
+                                observacoes=observacoes,
+                                template_doc=uploaded_template
                             )
+                            
+                            if doc:
+                                # Salvar documento em buffer
+                                buffer = BytesIO()
+                                doc.save(buffer)
+                                buffer.seek(0)
+                                
+                                documentos_gerados.append({
+                                    'nome': nome_funcionario.replace(' ', '_').replace('/', '_'),
+                                    'buffer': buffer
+                                })
+                            
+                            # Atualizar progresso
+                            progress_bar.progress((idx + 1) / len(funcionarios_selecionados))
+                            time.sleep(0.3)
+                        
+                        # Debitar créditos
+                        debit_credits(user['id'], creditos_necessarios)
+                        
+                        status_text.text("✅ Geração concluída!")
+                        
+                        # Disponibilizar downloads
+                        if documentos_gerados:
+                            if len(documentos_gerados) == 1:
+                                st.markdown('<div class="success-msg">✅ Ordem de Serviço gerada com sucesso!</div>', unsafe_allow_html=True)
+                                st.download_button(
+                                    label="📥 Download da Ordem de Serviço",
+                                    data=documentos_gerados[0]['buffer'].getvalue(),
+                                    file_name=f"OS_{documentos_gerados[0]['nome']}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    use_container_width=True
+                                )
+                            else:
+                                st.markdown(f'<div class="success-msg">✅ {len(documentos_gerados)} Ordens de Serviço geradas com sucesso!</div>', unsafe_allow_html=True)
+                                
+                                # Criar arquivo ZIP
+                                zip_buffer = BytesIO()
+                                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                                    for doc_info in documentos_gerados:
+                                        zip_file.writestr(
+                                            f"OS_{doc_info['nome']}.docx",
+                                            doc_info['buffer'].getvalue()
+                                        )
+                                
+                                zip_buffer.seek(0)
+                                
+                                st.download_button(
+                                    label=f"📥 Download de {len(documentos_gerados)} Ordens de Serviço (ZIP)",
+                                    data=zip_buffer.getvalue(),
+                                    file_name=f"Lote_OS_{datetime.date.today().strftime('%d%m%Y')}.zip",
+                                    mime="application/zip",
+                                    use_container_width=True
+                                )
                         else:
-                            st.success(f"✅ {len(documentos_gerados)} Ordens de Serviço geradas com sucesso!")
-                            
-                            # Criar arquivo ZIP
-                            zip_buffer = BytesIO()
-                            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                                for doc_info in documentos_gerados:
-                                    zip_file.writestr(
-                                        f"OS_{doc_info['nome']}.docx",
-                                        doc_info['buffer'].getvalue()
-                                    )
-                            
-                            zip_buffer.seek(0)
-                            
-                            st.download_button(
-                                label=f"📥 Download de {len(documentos_gerados)} Ordens de Serviço (ZIP)",
-                                data=zip_buffer.getvalue(),
-                                file_name=f"Lote_OS_{datetime.date.today().strftime('%d%m%Y')}.zip",
-                                mime="application/zip",
-                                use_container_width=True
-                            )
-                    else:
-                        st.error("❌ Erro: Nenhum documento foi gerado. Verifique as configurações.")
+                            st.markdown('<div class="error-msg">❌ Erro: Nenhum documento foi gerado. Verifique as configurações.</div>', unsafe_allow_html=True)
+                        
+                        time.sleep(2)
+                        st.rerun()
+                else:
+                    st.markdown(f'<div class="error-msg">⚠️ Créditos insuficientes. Você precisa de {creditos_necessarios} créditos, mas possui apenas {creditos_usuario}.</div>', unsafe_allow_html=True)
         
         except Exception as e:
-            st.error(f"❌ Erro ao processar planilha: {str(e)}")
+            st.markdown(f'<div class="error-msg">❌ Erro ao processar planilha: {str(e)}</div>', unsafe_allow_html=True)
     
     else:
         # Instruções iniciais
         total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
         st.markdown(f"""
-        <div class="info-message">
+        <div class="info-msg">
             <h4>🎯 Como usar o sistema:</h4>
             <ol>
                 <li><strong>📤 Faça upload</strong> da planilha Excel com dados dos funcionários</li>
