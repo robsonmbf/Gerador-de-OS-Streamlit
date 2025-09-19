@@ -234,9 +234,15 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders com tratamento especial para medições.
-    Preserva formatação original dos rótulos, remove negrito dos valores.
+    Substitui placeholders com formatação definitiva.
+    Garante Segoe UI tamanho 9 e espaçamento correto.
     """
+    def aplicar_formatacao_padrao(run):
+        """Aplica formatação padrão Segoe UI 9pt"""
+        run.font.name = 'Segoe UI'
+        run.font.size = Pt(9)
+        return run
+
     def processar_paragrafo(p):
         texto_completo = p.text
         texto_modificado = texto_completo
@@ -248,25 +254,32 @@ def substituir_placeholders(doc, contexto):
 
         if texto_modificado != texto_completo:
             # Tratamento ESPECIAL para medições
-            if "[MEDIÇÕES]" in texto_completo and contexto.get("[MEDIÇÕES]", "") != "Não aplicável":
-                # Para medições, vamos inserir de forma especial
+            if "[MEDIÇÕES]" in texto_completo:
                 medicoes_valor = contexto.get("[MEDIÇÕES]", "")
-                if medicoes_valor and "\n" in medicoes_valor:
+                if medicoes_valor and medicoes_valor != "Não aplicável":
                     # Limpar o parágrafo
                     for run in p.runs[:]:
                         p._element.remove(run._element)
 
-                    # Inserir cada medição como linha separada no mesmo parágrafo
+                    # Inserir cada medição como linha simples
                     linhas = medicoes_valor.split("\n")
                     for i, linha in enumerate(linhas):
                         if linha.strip():
                             if i > 0:
-                                # Adicionar quebra de linha manual
                                 p.add_run().add_break()
 
-                            # Adicionar a linha da medição sem negrito
+                            # Adicionar a medição com formatação correta
                             run_medicao = p.add_run(linha.strip())
+                            aplicar_formatacao_padrao(run_medicao)
                             run_medicao.font.bold = False
+                    return
+                else:
+                    # Se não há medições, inserir "Não aplicável"
+                    for run in p.runs[:]:
+                        p._element.remove(run._element)
+                    run_na = p.add_run("Não aplicável")
+                    aplicar_formatacao_padrao(run_na)
+                    run_na.font.bold = False
                     return
 
             # Tratamento normal para outros placeholders
@@ -274,8 +287,6 @@ def substituir_placeholders(doc, contexto):
             if p.runs:
                 font = p.runs[0].font
                 font_info = {
-                    'name': font.name,
-                    'size': font.size,
                     'bold': font.bold,
                     'italic': font.italic,
                     'underline': p.runs[0].underline
@@ -289,58 +300,38 @@ def substituir_placeholders(doc, contexto):
             texto_processado = False
             for key, value in contexto.items():
                 if key in texto_completo:
-                    # Dividir o texto em partes: antes, placeholder, depois
                     partes = texto_modificado.split(str(value), 1)
                     if len(partes) == 2:
-                        # Parte antes do valor substituído (manter formatação original)
+                        # Parte antes (rótulo - manter negrito)
                         if partes[0]:
-                            run_antes = p.add_run(partes[0])
+                            run_antes = aplicar_formatacao_padrao(p.add_run(partes[0]))
                             if font_info:
-                                if font_info['name']:
-                                    run_antes.font.name = font_info['name']
-                                if font_info['size']:
-                                    run_antes.font.size = font_info['size']
-                                run_antes.font.bold = font_info['bold']  # MANTER NEGRITO ORIGINAL
+                                run_antes.font.bold = font_info['bold']
                                 run_antes.font.italic = font_info['italic']
                                 run_antes.underline = font_info['underline']
 
-                        # Valor substituído (SEM negrito)
-                        run_valor = p.add_run(str(value))
+                        # Valor substituído (sem negrito)
+                        run_valor = aplicar_formatacao_padrao(p.add_run(str(value)))
+                        run_valor.font.bold = False
                         if font_info:
-                            if font_info['name']:
-                                run_valor.font.name = font_info['name']
-                            if font_info['size']:
-                                run_valor.font.size = font_info['size']
-                            run_valor.font.bold = False  # SEM NEGRITO
                             run_valor.font.italic = font_info['italic']
                             run_valor.underline = font_info['underline']
 
-                        # Parte depois (manter formatação original)
+                        # Parte depois (manter formatação)
                         if partes[1]:
-                            run_depois = p.add_run(partes[1])
+                            run_depois = aplicar_formatacao_padrao(p.add_run(partes[1]))
                             if font_info:
-                                if font_info['name']:
-                                    run_depois.font.name = font_info['name']
-                                if font_info['size']:
-                                    run_depois.font.size = font_info['size']
-                                run_depois.font.bold = font_info['bold']  # MANTER NEGRITO ORIGINAL
+                                run_depois.font.bold = font_info['bold']
                                 run_depois.font.italic = font_info['italic']
                                 run_depois.underline = font_info['underline']
 
                         texto_processado = True
                         break
 
-            # Se não conseguiu dividir corretamente, usar método simples
+            # Fallback
             if not texto_processado:
-                new_run = p.add_run(texto_modificado)
-                if font_info:
-                    if font_info['name']:
-                        new_run.font.name = font_info['name']
-                    if font_info['size']:
-                        new_run.font.size = font_info['size']
-                    new_run.font.bold = False
-                    new_run.font.italic = font_info['italic']
-                    new_run.underline = font_info['underline']
+                run_simples = aplicar_formatacao_padrao(p.add_run(texto_modificado))
+                run_simples.font.bold = False
 
     # Processar tabelas
     for table in doc.tables:
@@ -382,38 +373,33 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # FORMATAÇÃO ULTRA LIMPA DAS MEDIÇÕES - Versão final
-    medicoes_ordenadas = sorted(medicoes_manuais, key=lambda med: med.get('agent', ''))
+    # FORMATAÇÃO DEFINITIVA - Ultra simples das medições
     medicoes_formatadas = []
 
-    for med in medicoes_ordenadas:
-        # Limpar todos os valores
-        agente = str(med.get('agent', 'N/A')).strip()
-        valor = str(med.get('value', 'N/A')).strip()
+    for med in medicoes_manuais:
+        # Obter valores limpos
+        agente = str(med.get('agent', '')).strip()
+        valor = str(med.get('value', '')).strip()
         unidade = str(med.get('unit', '')).strip()
         epi = str(med.get('epi', '')).strip()
 
-        # Remover valores vazios ou inválidos
-        if valor in ['', 'N/A', 'nan', 'None']:
-            valor = 'N/A'
+        # Validar se há dados válidos
+        if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
+            # Formato ULTRA SIMPLES: apenas "Agente: Valor Unidade"
+            linha = f"{agente}: {valor}"
 
-        # Construir linha super limpa
-        linha_medicao = f"{agente}: {valor}"
+            if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
+                linha += f" {unidade}"
 
-        # Adicionar unidade somente se for válida
-        if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
-            linha_medicao += f" {unidade}"
+            if epi and epi not in ['', 'N/A', 'nan', 'None']:
+                linha += f" | EPI: {epi}"
 
-        # Adicionar EPI somente se for válido
-        if epi and epi not in ['', 'N/A', 'nan', 'None']:
-            linha_medicao += f" | EPI: {epi}"
+            medicoes_formatadas.append(linha)
 
-        medicoes_formatadas.append(linha_medicao)
-
-    # Criar texto final das medições
+    # Criar texto das medições
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
-    # Processar data de admissão com melhor tratamento
+    # Processar data de admissão
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: 
@@ -426,14 +412,13 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         except Exception: 
             data_admissao = str(funcionario['Data de Admissão'])
 
-    # Processar descrição de atividades com melhor tratamento
+    # Processar descrição de atividades
     descricao_atividades = "Não informado"
     if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
         descricao_atividades = str(funcionario['descricao_de_atividades']).strip()
     elif 'Descrição de Atividades' in funcionario and pd.notna(funcionario['Descrição de Atividades']):
         descricao_atividades = str(funcionario['Descrição de Atividades']).strip()
 
-    # Se ainda não há descrição, criar uma baseada na função
     if descricao_atividades == "Não informado" or descricao_atividades == "" or descricao_atividades == "nan":
         funcao = str(funcionario.get('funcao', funcionario.get('Função', 'N/A')))
         setor = str(funcionario.get('setor', funcionario.get('Setor', 'N/A')))
@@ -447,7 +432,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             return "Não identificado"
         return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
 
-    # Criar contexto com todos os placeholders necessários
+    # Contexto final
     contexto = {
         "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
         "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
