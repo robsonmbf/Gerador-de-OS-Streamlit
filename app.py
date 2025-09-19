@@ -234,91 +234,102 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders no documento Word de forma robusta.
-    Garante que o texto inserido não fique em negrito.
+    Substitui placeholders preservando formatação do texto original.
+    Remove negrito apenas do conteúdo substituído dos placeholders.
     """
-    # Processar tabelas
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    # Obter todo o texto do parágrafo
-                    full_text = p.text
-                    # Verificar se há placeholders para substituir
-                    texto_modificado = full_text
-                    for key, value in contexto.items():
-                        if key in texto_modificado:
-                            texto_modificado = texto_modificado.replace(key, str(value))
+    def processar_paragrafo(p):
+        texto_completo = p.text
+        texto_modificado = texto_completo
 
-                    # Se o texto foi modificado, recriar o parágrafo
-                    if texto_modificado != full_text:
-                        # Salvar formatação do primeiro run se existir
-                        font_info = None
-                        if p.runs:
-                            font = p.runs[0].font
-                            font_info = {
-                                'name': font.name,
-                                'size': font.size,
-                                'italic': font.italic
-                            }
-                            # Limpar todos os runs
-                            for run in p.runs[:]:
-                                p._element.remove(run._element)
-
-                        # Criar novo run com texto modificado
-                        new_run = p.add_run(texto_modificado)
-
-                        # FORÇAR TEXTO SEM NEGRITO
-                        new_run.bold = False
-                        new_run.font.bold = False
-
-                        # Restaurar outras formatações
-                        if font_info:
-                            if font_info['name']:
-                                new_run.font.name = font_info['name']
-                            if font_info['size']:
-                                new_run.font.size = font_info['size']
-                            new_run.font.italic = font_info['italic']
-
-    # Processar parágrafos fora de tabelas
-    for p in doc.paragraphs:
-        # Obter todo o texto do parágrafo
-        full_text = p.text
         # Verificar se há placeholders para substituir
-        texto_modificado = full_text
         for key, value in contexto.items():
             if key in texto_modificado:
                 texto_modificado = texto_modificado.replace(key, str(value))
 
-        # Se o texto foi modificado, recriar o parágrafo
-        if texto_modificado != full_text:
-            # Salvar formatação do primeiro run se existir
+        if texto_modificado != texto_completo:
+            # Salvar formatação original
             font_info = None
             if p.runs:
                 font = p.runs[0].font
                 font_info = {
                     'name': font.name,
                     'size': font.size,
-                    'italic': font.italic
+                    'bold': font.bold,
+                    'italic': font.italic,
+                    'underline': p.runs[0].underline
                 }
-                # Limpar todos os runs
-                for run in p.runs[:]:
-                    p._element.remove(run._element)
 
-            # Criar novo run com texto modificado
-            new_run = p.add_run(texto_modificado)
+            # Limpar runs existentes
+            for run in p.runs[:]:
+                p._element.remove(run._element)
 
-            # FORÇAR TEXTO SEM NEGRITO
-            new_run.bold = False
-            new_run.font.bold = False
+            # Processar texto parte por parte
+            texto_restante = texto_modificado
 
-            # Restaurar outras formatações
-            if font_info:
-                if font_info['name']:
-                    new_run.font.name = font_info['name']
-                if font_info['size']:
-                    new_run.font.size = font_info['size']
-                new_run.font.italic = font_info['italic']
+            for key, value in contexto.items():
+                if key in texto_completo:
+                    # Dividir o texto em partes: antes, placeholder, depois
+                    partes = texto_restante.split(str(value), 1)
+                    if len(partes) == 2:
+                        # Parte antes do valor substituído (manter formatação original)
+                        if partes[0]:
+                            run_antes = p.add_run(partes[0])
+                            if font_info:
+                                if font_info['name']:
+                                    run_antes.font.name = font_info['name']
+                                if font_info['size']:
+                                    run_antes.font.size = font_info['size']
+                                run_antes.font.bold = font_info['bold']  # MANTER NEGRITO ORIGINAL
+                                run_antes.font.italic = font_info['italic']
+                                run_antes.underline = font_info['underline']
+
+                        # Valor substituído (SEM negrito)
+                        run_valor = p.add_run(str(value))
+                        if font_info:
+                            if font_info['name']:
+                                run_valor.font.name = font_info['name']
+                            if font_info['size']:
+                                run_valor.font.size = font_info['size']
+                            run_valor.font.bold = False  # SEM NEGRITO
+                            run_valor.font.italic = font_info['italic']
+                            run_valor.underline = font_info['underline']
+
+                        # Parte depois (manter formatação original)
+                        if partes[1]:
+                            run_depois = p.add_run(partes[1])
+                            if font_info:
+                                if font_info['name']:
+                                    run_depois.font.name = font_info['name']
+                                if font_info['size']:
+                                    run_depois.font.size = font_info['size']
+                                run_depois.font.bold = font_info['bold']  # MANTER NEGRITO ORIGINAL
+                                run_depois.font.italic = font_info['italic']
+                                run_depois.underline = font_info['underline']
+
+                        break
+
+            # Se não conseguiu dividir corretamente, usar método simples
+            if not p.runs:
+                new_run = p.add_run(texto_modificado)
+                if font_info:
+                    if font_info['name']:
+                        new_run.font.name = font_info['name']
+                    if font_info['size']:
+                        new_run.font.size = font_info['size']
+                    new_run.font.bold = False
+                    new_run.font.italic = font_info['italic']
+                    new_run.underline = font_info['underline']
+
+    # Processar tabelas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    processar_paragrafo(p)
+
+    # Processar parágrafos fora de tabelas
+    for p in doc.paragraphs:
+        processar_paragrafo(p)
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
