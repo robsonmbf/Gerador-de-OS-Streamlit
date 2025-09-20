@@ -234,101 +234,152 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders com ALINHAMENTO CORRETO.
-    Força alinhamento à esquerda para medições.
+    Substitui placeholders com formatação simples e estável.
+    Usa tabs para alinhamento das medições.
     """
     from docx.shared import Pt
-    from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    # Obter texto completo
-                    full_text = p.text
-                    texto_modificado = full_text
+    def aplicar_formatacao_padrao(run):
+        """Aplica formatação Segoe UI 9pt"""
+        run.font.name = 'Segoe UI'
+        run.font.size = Pt(9)
+        return run
 
-                    # Substituir placeholders
-                    for key, value in contexto.items():
-                        if key in texto_modificado:
-                            texto_modificado = texto_modificado.replace(key, str(value))
+    def formatar_medicoes_com_tabs(medicoes_texto):
+        """Formata medições usando tabs para alinhamento"""
+        if not medicoes_texto or medicoes_texto == "Não aplicável":
+            return "Não aplicável"
 
-                    # Se mudou, recriar o parágrafo
-                    if texto_modificado != full_text:
-                        # CORREÇÃO ESPECIAL PARA MEDIÇÕES
-                        if "[MEDIÇÕES]" in full_text:
-                            # Forçar alinhamento à esquerda
-                            p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-                            print(f"✅ Alinhamento à esquerda aplicado para medições")
+        linhas = medicoes_texto.split("\n")
+        medicoes_formatadas = []
 
-                        # Salvar formatação original
-                        font_info = None
-                        if p.runs:
-                            font = p.runs[0].font
-                            font_info = {
-                                'name': font.name,
-                                'size': font.size,
-                                'bold': font.bold,
-                                'italic': font.italic
-                            }
+        for linha in linhas:
+            if ":" in linha:
+                # Separar agente e valor
+                partes = linha.split(":", 1)
+                if len(partes) == 2:
+                    agente = partes[0].strip()
+                    valor = partes[1].strip()
 
-                        # Limpar runs
-                        for run in p.runs[:]:
-                            p._element.remove(run._element)
+                    # Formato com tab para alinhamento
+                    linha_formatada = f"{agente}:\t{valor}"
+                    medicoes_formatadas.append(linha_formatada)
 
-                        # Criar novo run
-                        new_run = p.add_run(texto_modificado)
+        return "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
-                        # Aplicar formatação Segoe UI 9pt
-                        new_run.font.name = 'Segoe UI'
-                        new_run.font.size = Pt(9)
-                        new_run.font.bold = False
-                        if font_info and font_info['italic']:
-                            new_run.font.italic = font_info['italic']
+    def processar_paragrafo(p):
+        texto_completo = p.text
+        texto_modificado = texto_completo
 
-    # Processar parágrafos fora de tabelas
-    for p in doc.paragraphs:
-        # Obter texto completo
-        full_text = p.text
-        texto_modificado = full_text
-
-        # Substituir placeholders
+        # Verificar se há placeholders para substituir
         for key, value in contexto.items():
             if key in texto_modificado:
+                if key == "[MEDIÇÕES]":
+                    # Formatação especial para medições
+                    value = formatar_medicoes_com_tabs(str(value))
                 texto_modificado = texto_modificado.replace(key, str(value))
 
-        # Se mudou, recriar o parágrafo
-        if texto_modificado != full_text:
-            # CORREÇÃO ESPECIAL PARA MEDIÇÕES
-            if "[MEDIÇÕES]" in full_text:
-                # Forçar alinhamento à esquerda
-                p.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-                print(f"✅ Alinhamento à esquerda aplicado para medições")
-
+        if texto_modificado != texto_completo:
             # Salvar formatação original
             font_info = None
             if p.runs:
                 font = p.runs[0].font
                 font_info = {
-                    'name': font.name,
-                    'size': font.size,
                     'bold': font.bold,
-                    'italic': font.italic
+                    'italic': font.italic,
+                    'underline': p.runs[0].underline
                 }
 
-            # Limpar runs
+            # Limpar runs existentes
             for run in p.runs[:]:
                 p._element.remove(run._element)
 
-            # Criar novo run
-            new_run = p.add_run(texto_modificado)
+            # Tratamento especial para medições com tabs
+            if "[MEDIÇÕES]" in texto_completo:
+                medicoes_valor = contexto.get("[MEDIÇÕES]", "")
+                if medicoes_valor and medicoes_valor != "Não aplicável":
+                    medicoes_formatadas = formatar_medicoes_com_tabs(medicoes_valor)
 
-            # Aplicar formatação Segoe UI 9pt
-            new_run.font.name = 'Segoe UI'
-            new_run.font.size = Pt(9)
-            new_run.font.bold = False
-            if font_info and font_info['italic']:
-                new_run.font.italic = font_info['italic']
+                    # Inserir cada linha de medição
+                    linhas = medicoes_formatadas.split("\n")
+                    for i, linha in enumerate(linhas):
+                        if linha.strip():
+                            if i > 0:
+                                p.add_run().add_break()
+
+                            # Processar linha com tab
+                            if "\t" in linha:
+                                partes = linha.split("\t", 1)
+
+                                # Agente (negrito)
+                                run_agente = aplicar_formatacao_padrao(p.add_run(partes[0]))
+                                run_agente.font.bold = True
+
+                                # Tab space (aproximado)
+                                run_tab = aplicar_formatacao_padrao(p.add_run("\t\t"))
+                                run_tab.font.bold = False
+
+                                # Valor (sem negrito)
+                                if len(partes) > 1:
+                                    run_valor = aplicar_formatacao_padrao(p.add_run(partes[1]))
+                                    run_valor.font.bold = False
+                            else:
+                                # Linha simples
+                                run_linha = aplicar_formatacao_padrao(p.add_run(linha))
+                                run_linha.font.bold = False
+                else:
+                    # Não há medições
+                    run_na = aplicar_formatacao_padrao(p.add_run("Não aplicável"))
+                    run_na.font.bold = False
+                return
+
+            # Processar outros placeholders normalmente
+            texto_processado = False
+            for key, value in contexto.items():
+                if key in texto_completo and key != "[MEDIÇÕES]":
+                    partes = texto_modificado.split(str(value), 1)
+                    if len(partes) == 2:
+                        # Parte antes (rótulo)
+                        if partes[0]:
+                            run_antes = aplicar_formatacao_padrao(p.add_run(partes[0]))
+                            if font_info:
+                                run_antes.font.bold = font_info['bold']
+                                run_antes.font.italic = font_info['italic']
+                                run_antes.underline = font_info['underline']
+
+                        # Valor substituído
+                        run_valor = aplicar_formatacao_padrao(p.add_run(str(value)))
+                        run_valor.font.bold = False
+                        if font_info:
+                            run_valor.font.italic = font_info['italic']
+                            run_valor.underline = font_info['underline']
+
+                        # Parte depois
+                        if partes[1]:
+                            run_depois = aplicar_formatacao_padrao(p.add_run(partes[1]))
+                            if font_info:
+                                run_depois.font.bold = font_info['bold']
+                                run_depois.font.italic = font_info['italic']
+                                run_depois.underline = font_info['underline']
+
+                        texto_processado = True
+                        break
+
+            # Fallback
+            if not texto_processado:
+                run_simples = aplicar_formatacao_padrao(p.add_run(texto_modificado))
+                run_simples.font.bold = False
+
+    # Processar tabelas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    processar_paragrafo(p)
+
+    # Processar parágrafos fora de tabelas
+    for p in doc.paragraphs:
+        processar_paragrafo(p)
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
@@ -359,28 +410,26 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
-    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
+    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES (será processada com tabs)
     medicoes_formatadas = []
 
     for med in medicoes_manuais:
         agente = str(med.get('agent', '')).strip()
-        valor = str(med.get('value', '')).strip()  
+        valor = str(med.get('value', '')).strip()
         unidade = str(med.get('unit', '')).strip()
         epi = str(med.get('epi', '')).strip()
 
-        if agente and valor and agente not in ['N/A', 'nan', 'None'] and valor not in ['N/A', 'nan', 'None']:
-            # Formato simples: "Agente: Valor Unidade"
+        if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
             linha = f"{agente}: {valor}"
 
-            if unidade and unidade not in ['N/A', 'nan', 'None', '']:
+            if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
                 linha += f" {unidade}"
 
-            if epi and epi not in ['N/A', 'nan', 'None', '']:
+            if epi and epi not in ['', 'N/A', 'nan', 'None']:
                 linha += f" | EPI: {epi}"
 
             medicoes_formatadas.append(linha)
 
-    # Texto final
     medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
 
     # Processar data de admissão
