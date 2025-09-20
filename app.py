@@ -220,18 +220,18 @@ CATEGORIAS_RISCO = {
     'acidente': '⚠️ Acidentes'
 }
 
-# --- CSS TOTALMENTE PRETO ---
+# --- CSS DARK MINIMALISTA ---
 st.markdown("""
 <style>
-    /* FUNDO TOTALMENTE PRETO */
+    /* TEMA DARK MINIMALISTA - SEM CORES VIBRANTES */
     .stApp {
-        background: #000000 !important;
-        color: #ffffff !important;
+        background: #0d1117 !important;
+        color: #e6edf3 !important;
     }
     
     .main {
-        background: #000000 !important;
-        color: #ffffff !important;
+        background: #0d1117 !important;
+        color: #e6edf3 !important;
     }
     
     /* OCULTAR HEADER COMPLETAMENTE */
@@ -246,221 +246,269 @@ st.markdown("""
         padding-bottom: 1rem;
     }
     
-    /* TÍTULO PRINCIPAL */
+    /* TÍTULO PRINCIPAL - MINIMALISTA */
     .title-header {
         text-align: center;
-        color: #00ff00;
-        font-size: 3rem;
-        font-weight: bold;
+        color: #f0f6fc;
+        font-size: 2.5rem;
+        font-weight: 300;
         margin: 2rem 0;
-        text-shadow: 2px 2px 4px rgba(0,255,0,0.5);
+        letter-spacing: 1px;
     }
     
-    /* FORMULÁRIO DE LOGIN */
+    /* FORMULÁRIO DE LOGIN - MINIMALISTA */
     .login-container {
-        max-width: 500px;
+        max-width: 450px;
         margin: 2rem auto;
         padding: 2rem;
-        background: #111111;
-        border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(0,255,0,0.2);
-        border: 2px solid #00ff00;
+        background: #161b22;
+        border-radius: 8px;
+        border: 1px solid #30363d;
     }
     
     .login-title {
         text-align: center;
-        color: #00ff00;
-        font-size: 2rem;
+        color: #f0f6fc;
+        font-size: 1.5rem;
+        font-weight: 400;
         margin-bottom: 2rem;
     }
     
-    /* BOTÕES */
+    /* BOTÕES MINIMALISTAS */
     .stButton > button {
-        background: linear-gradient(135deg, #00ff00, #00cc00);
-        color: black;
-        border: none;
-        border-radius: 10px;
-        padding: 0.75rem 1.5rem;
-        font-size: 1.1rem;
-        font-weight: 600;
+        background: #21262d;
+        color: #f0f6fc;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        font-weight: 400;
         width: 100%;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #00cc00, #009900);
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0, 255, 0, 0.4);
+        background: #30363d;
+        border-color: #484f58;
     }
     
-    /* INPUTS */
+    .stButton > button:focus {
+        background: #30363d;
+        border-color: #58a6ff;
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+    }
+    
+    /* INPUTS MINIMALISTAS */
     .stTextInput > div > div > input {
-        background: #111111 !important;
-        color: white !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
-        padding: 0.75rem !important;
+        background: #0d1117 !important;
+        color: #f0f6fc !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
+        padding: 0.5rem !important;
+        font-size: 14px !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #00ff00 !important;
-        box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2) !important;
+        border-color: #58a6ff !important;
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1) !important;
+        outline: none !important;
     }
     
-    /* SELECTBOX */
+    /* SELECTBOX MINIMALISTA */
     .stSelectbox > div > div {
-        background: #111111 !important;
-        color: white !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
+        background: #0d1117 !important;
+        color: #f0f6fc !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
     }
     
     .stSelectbox [data-baseweb="select"] {
-        background: #111111 !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
+        background: #0d1117 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
     }
     
-    /* MULTISELECT */
+    /* MULTISELECT MINIMALISTA */
     .stMultiSelect > div > div {
-        background: #111111 !important;
-        color: white !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
+        background: #0d1117 !important;
+        color: #f0f6fc !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
     }
     
     .stMultiSelect [data-baseweb="select"] {
-        background: #111111 !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
+        background: #0d1117 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
     }
     
-    /* MENSAGENS */
+    /* MENSAGENS MINIMALISTAS */
     .success-msg {
-        background: rgba(0, 255, 0, 0.1);
-        border: 1px solid #00ff00;
-        border-radius: 8px;
-        padding: 1rem;
-        color: #00ff00;
+        background: rgba(46, 160, 67, 0.1);
+        border: 1px solid #238636;
+        border-radius: 6px;
+        padding: 12px;
+        color: #7ee787;
         margin: 1rem 0;
+        font-size: 14px;
     }
     
     .error-msg {
-        background: rgba(255, 0, 0, 0.1);
-        border: 1px solid #ff0000;
-        border-radius: 8px;
-        padding: 1rem;
-        color: #ff0000;
+        background: rgba(248, 81, 73, 0.1);
+        border: 1px solid #da3633;
+        border-radius: 6px;
+        padding: 12px;
+        color: #f85149;
         margin: 1rem 0;
+        font-size: 14px;
     }
     
     .info-msg {
-        background: rgba(0, 255, 255, 0.1);
-        border: 1px solid #00ffff;
-        border-radius: 8px;
-        padding: 1rem;
-        color: #00ffff;
+        background: rgba(56, 139, 253, 0.1);
+        border: 1px solid #1f6feb;
+        border-radius: 6px;
+        padding: 12px;
+        color: #79c0ff;
         margin: 1rem 0;
+        font-size: 14px;
     }
     
     .warning-msg {
-        background: rgba(255, 255, 0, 0.1);
-        border: 1px solid #ffff00;
-        border-radius: 8px;
-        padding: 1rem;
-        color: #ffff00;
+        background: rgba(187, 128, 9, 0.1);
+        border: 1px solid #bb8009;
+        border-radius: 6px;
+        padding: 12px;
+        color: #f2cc60;
         margin: 1rem 0;
+        font-size: 14px;
     }
     
-    /* TABS */
+    /* TABS MINIMALISTAS */
     .stTabs [data-baseweb="tab-list"] {
-        background: #111111;
-        border-radius: 10px 10px 0 0;
+        background: transparent;
+        border-bottom: 1px solid #30363d;
     }
     
     .stTabs [data-baseweb="tab"] {
         background: transparent;
-        color: #ffffff;
+        color: #7d8590;
+        border: none;
+        padding: 8px 16px;
     }
     
     .stTabs [aria-selected="true"] {
-        background: #00ff00 !important;
-        color: black !important;
+        background: transparent !important;
+        color: #f0f6fc !important;
+        border-bottom: 2px solid #58a6ff !important;
     }
     
-    /* SIDEBAR */
+    /* SIDEBAR MINIMALISTA */
     .css-1d391kg {
-        background: #111111 !important;
+        background: #161b22 !important;
+        border-right: 1px solid #30363d;
     }
     
-    /* UPLOAD AREAS */
+    /* UPLOAD AREAS MINIMALISTAS */
     .upload-area {
-        background: #111111;
-        border: 2px dashed #00ff00;
-        border-radius: 10px;
+        background: #161b22;
+        border: 2px dashed #30363d;
+        border-radius: 8px;
         padding: 2rem;
         text-align: center;
         margin: 1rem 0;
-        color: white;
+        color: #7d8590;
     }
     
-    /* CARDS */
+    .upload-area:hover {
+        border-color: #58a6ff;
+        background: #0d1117;
+    }
+    
+    /* CARDS MINIMALISTAS */
     .metric-card {
-        background: #111111;
-        padding: 1.5rem;
-        border-radius: 10px;
+        background: #161b22;
+        padding: 1rem;
+        border-radius: 8px;
         text-align: center;
-        border: 1px solid #333333;
+        border: 1px solid #30363d;
         margin: 0.5rem 0;
     }
     
     .metric-card h3 {
-        color: #00ff00;
-        font-size: 2rem;
+        color: #f0f6fc;
+        font-size: 1.5rem;
+        font-weight: 600;
         margin-bottom: 0.5rem;
     }
     
     .metric-card p {
-        color: #ffffff;
+        color: #7d8590;
         margin: 0;
+        font-size: 14px;
     }
     
-    /* EXPANSORES */
+    /* EXPANSORES MINIMALISTAS */
     .streamlit-expanderHeader {
-        background: #111111 !important;
-        border: 1px solid #333333 !important;
-        border-radius: 8px !important;
-        color: white !important;
+        background: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
+        color: #f0f6fc !important;
     }
     
     .streamlit-expanderContent {
-        background: #000000 !important;
-        border: 1px solid #333333 !important;
-        color: white !important;
+        background: #0d1117 !important;
+        border: 1px solid #30363d !important;
+        color: #f0f6fc !important;
+        border-radius: 0 0 6px 6px !important;
     }
     
-    /* TEXT AREAS */
+    /* TEXT AREAS MINIMALISTAS */
     .stTextArea > div > div > textarea {
-        background: #111111 !important;
-        color: white !important;
-        border: 2px solid #333333 !important;
-        border-radius: 8px !important;
+        background: #0d1117 !important;
+        color: #f0f6fc !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
     }
     
     .stTextArea > div > div > textarea:focus {
-        border-color: #00ff00 !important;
-        box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2) !important;
+        border-color: #58a6ff !important;
+        box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1) !important;
     }
     
-    /* RADIO BUTTONS */
+    /* RADIO BUTTONS MINIMALISTAS */
     .stRadio > div {
         background: transparent !important;
-        color: white !important;
+        color: #f0f6fc !important;
     }
     
-    /* PROGRESS BAR */
+    /* PROGRESS BAR MINIMALISTA */
     .stProgress > div > div > div {
-        background: #00ff00 !important;
+        background: #58a6ff !important;
+    }
+    
+    /* MÉTRICAS MINIMALISTAS */
+    [data-testid="metric-container"] {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    [data-testid="metric-container"] > div {
+        color: #f0f6fc;
+    }
+    
+    [data-testid="metric-container"] [data-testid="metric-value"] {
+        color: #f0f6fc;
+    }
+    
+    [data-testid="metric-container"] [data-testid="metric-label"] {
+        color: #7d8590;
+    }
+    
+    /* REMOVER CORES DE FUNDO PADRÃO */
+    .stApp > div > div > div > div {
+        background: transparent !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -803,34 +851,44 @@ def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventiv
 
 # --- FUNÇÃO DE LOGIN ---
 def show_login_page():
-    st.markdown('<div class="title-header">🔐 Gerador de Ordens de Serviço (OS)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title-header">Gerador de Ordens de Serviço</div>', unsafe_allow_html=True)
     
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     
     st.markdown(f"""
     <div class="info-msg">
-        <strong>🆕 SISTEMA ATUALIZADO - Base Expandida de Riscos!</strong><br><br>
-        ✨ <strong>{total_riscos} opções</strong> de riscos ocupacionais organizados em 5 categorias<br>
-        🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas<br>
-        ⚠️ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas<br>
-        🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
-        ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
-        🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19<br><br>
-        📄 Sistema profissional conforme NR-01 com tema black!
+        <strong>Sistema Atualizado - Base Expandida de Riscos</strong><br><br>
+        ✅ <strong>{total_riscos} opções</strong> de riscos ocupacionais organizados em 5 categorias<br>
+        ✅ <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} opções específicas<br>
+        ✅ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} opções detalhadas<br>
+        ✅ <strong>Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
+        ✅ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
+        ✅ <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19<br><br>
+        Sistema profissional conforme NR-01 com tema minimalista
     </div>
     """, unsafe_allow_html=True)
     
-    login_tab, register_tab = st.tabs(["🔑 Login", "👤 Criar Conta"])
+    login_tab, register_tab = st.tabs(["Login", "Criar Conta"])
     
     with login_tab:
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">🔑 Faça seu Login</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">Acesso ao Sistema</div>', unsafe_allow_html=True)
+        
+        # MOSTRAR DADOS DE ACESSO ADMIN
+        st.markdown("""
+        <div class="warning-msg">
+            <strong>👑 Dados de Acesso Administrador:</strong><br>
+            📧 <strong>Email:</strong> robsonmbf@hotmail.com<br>
+            🔒 <strong>Senha:</strong> 123456<br>
+            💳 <strong>Créditos:</strong> Ilimitados
+        </div>
+        """, unsafe_allow_html=True)
         
         with st.form("login_form"):
-            email = st.text_input("📧 Email:", placeholder="seu@gmail.com")
-            password = st.text_input("🔒 Senha:", type="password", placeholder="Sua senha")
+            email = st.text_input("Email:", placeholder="seu@gmail.com")
+            password = st.text_input("Senha:", type="password", placeholder="Sua senha")
             
-            login_button = st.form_submit_button("🚀 Entrar")
+            login_button = st.form_submit_button("Entrar no Sistema")
             
             if login_button:
                 if email and password:
@@ -839,38 +897,38 @@ def show_login_page():
                         if user:
                             st.session_state.user = user
                             st.session_state.authenticated = True
-                            st.markdown('<div class="success-msg">✅ Login realizado com sucesso!</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="success-msg">Login realizado com sucesso</div>', unsafe_allow_html=True)
                             time.sleep(1)
                             st.rerun()
                         else:
-                            st.markdown('<div class="error-msg">❌ Email ou senha incorretos.</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="error-msg">Email ou senha incorretos</div>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div class="error-msg">❌ Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="error-msg">Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="error-msg">Por favor, preencha todos os campos</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
     
     with register_tab:
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">👤 Criar Nova Conta</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-title">Criar Nova Conta</div>', unsafe_allow_html=True)
         
         with st.form("register_form"):
             col1, col2 = st.columns(2)
             with col1:
-                nome = st.text_input("👤 Nome:", placeholder="Seu nome completo")
+                nome = st.text_input("Nome:", placeholder="Seu nome completo")
             with col2:
-                empresa = st.text_input("🏢 Empresa:", placeholder="Nome da empresa")
+                empresa = st.text_input("Empresa:", placeholder="Nome da empresa")
             
-            email = st.text_input("📧 Email:", placeholder="seu@gmail.com")
+            email = st.text_input("Email:", placeholder="seu@gmail.com")
             
             col3, col4 = st.columns(2)
             with col3:
-                password = st.text_input("🔒 Senha:", type="password", placeholder="Mínimo 6 caracteres")
+                password = st.text_input("Senha:", type="password", placeholder="Mínimo 6 caracteres")
             with col4:
-                password_confirm = st.text_input("🔒 Confirmar:", type="password", placeholder="Confirme a senha")
+                password_confirm = st.text_input("Confirmar:", type="password", placeholder="Confirme a senha")
             
-            register_button = st.form_submit_button("✨ Criar Conta")
+            register_button = st.form_submit_button("Criar Conta")
             
             if register_button:
                 if nome and empresa and email and password and password_confirm:
@@ -879,17 +937,17 @@ def show_login_page():
                             if len(password) >= 6:
                                 user_id = register_user(email, password, nome, empresa)
                                 if user_id:
-                                    st.markdown('<div class="success-msg">✅ Conta criada com sucesso! Faça login para continuar.</div>', unsafe_allow_html=True)
+                                    st.markdown('<div class="success-msg">Conta criada com sucesso! Faça login para continuar</div>', unsafe_allow_html=True)
                                 else:
-                                    st.markdown('<div class="error-msg">❌ Erro ao criar conta. Email já pode estar em uso.</div>', unsafe_allow_html=True)
+                                    st.markdown('<div class="error-msg">Erro ao criar conta. Email já pode estar em uso</div>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<div class="error-msg">❌ A senha deve ter pelo menos 6 caracteres.</div>', unsafe_allow_html=True)
+                                st.markdown('<div class="error-msg">A senha deve ter pelo menos 6 caracteres</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown('<div class="error-msg">❌ As senhas não coincidem.</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="error-msg">As senhas não coincidem</div>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div class="error-msg">❌ Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="error-msg">Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="error-msg">Por favor, preencha todos os campos</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -898,25 +956,25 @@ def show_main_app(user):
     col1, col2, col3 = st.columns([3, 1, 1])
     
     with col1:
-        st.markdown(f"# 📄 Gerador de OS - Bem-vindo, **{user['nome']}**!")
+        st.markdown(f"# Gerador de OS - Bem-vindo, **{user['nome']}**")
     
     with col2:
         credits = get_user_credits(user['id'])
-        st.metric("💳 Créditos", credits)
+        st.metric("Créditos", credits)
     
     with col3:
-        if st.button("🚪 Logout"):
+        if st.button("Sair"):
             st.session_state.authenticated = False
             st.session_state.user = None
             st.rerun()
     
-    st.markdown(f"🏢 **Empresa:** {user['empresa']}")
+    st.markdown(f"**Empresa:** {user['empresa']}")
     
     # Mostrar status de admin se for o caso
     if user.get('is_admin', False):
         st.markdown("""
         <div class="warning-msg">
-            <strong>👑 CONTA ADMINISTRADOR</strong><br>
+            <strong>Conta Administrador</strong><br>
             • Créditos ilimitados<br>
             • Não há cobrança de créditos<br>
             • Acesso completo ao sistema
@@ -926,20 +984,15 @@ def show_main_app(user):
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     st.markdown(f"""
     <div class="info-msg">
-        <strong>🚀 SISTEMA ATUALIZADO - Nova Base de Riscos!</strong><br><br>
+        <strong>Sistema Atualizado</strong><br><br>
         📊 <strong>Total:</strong> {total_riscos} opções de riscos ocupacionais organizados em 5 categorias<br>
-        🏃 <strong>Ergonômicos:</strong> {len(RISCOS_ERGONOMICO)} riscos específicos<br>
-        ⚠️ <strong>Acidentes:</strong> {len(RISCOS_ACIDENTE)} riscos detalhados<br>
-        🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} riscos ampliados<br>
-        ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
-        🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19<br><br>
-        ✅ <strong>NOVO:</strong> Sistema preenche automaticamente "Ausência de Fator de Risco" quando nenhum risco for selecionado
+        ✅ <strong>Preenchimento automático:</strong> "Ausência de Fator de Risco" quando necessário
     </div>
     """, unsafe_allow_html=True)
     
     # Sidebar com informações
     with st.sidebar:
-        st.markdown("### 📊 Base de Riscos Expandida")
+        st.markdown("### Base de Riscos")
         st.markdown(f"**Total: {total_riscos} opções**")
         
         for categoria, nome in CATEGORIAS_RISCO.items():
@@ -947,16 +1000,16 @@ def show_main_app(user):
             st.markdown(f"- {nome}: **{qtd_riscos}** opções")
         
         st.markdown("---")
-        st.markdown("### 💳 Informações da Conta")
+        st.markdown("### Informações da Conta")
         st.markdown(f"**Nome:** {user['nome']}")
         st.markdown(f"**Email:** {user['email']}")
         st.markdown(f"**Empresa:** {user['empresa']}")
         st.markdown(f"**Créditos:** {credits}")
         if user.get('is_admin', False):
-            st.markdown("**Status:** 👑 Administrador")
+            st.markdown("**Status:** Administrador")
         
         st.markdown("---")
-        st.markdown("### 📋 Estrutura da Planilha")
+        st.markdown("### Estrutura da Planilha")
         st.markdown("""
         **Colunas obrigatórias:**
         - Nome, Setor, Função
@@ -972,7 +1025,7 @@ def show_main_app(user):
         sample_buffer.seek(0)
         
         st.download_button(
-            "📥 Baixar Planilha Exemplo",
+            "Baixar Planilha Exemplo",
             data=sample_buffer.getvalue(),
             file_name="modelo_funcionarios.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -980,14 +1033,14 @@ def show_main_app(user):
         )
     
     # Seção de upload de arquivos
-    st.markdown("## 📤 Upload de Arquivos")
+    st.markdown("## Upload de Arquivos")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
         <div class="upload-area">
-            <h4>📊 Planilha de Funcionários</h4>
+            <h4>Planilha de Funcionários</h4>
             <p>Arquivo Excel (.xlsx) com dados dos funcionários</p>
         </div>
         """, unsafe_allow_html=True)
@@ -1001,7 +1054,7 @@ def show_main_app(user):
     with col2:
         st.markdown("""
         <div class="upload-area">
-            <h4>📄 Modelo de OS (Opcional)</h4>
+            <h4>Modelo de OS (Opcional)</h4>
             <p>Template Word personalizado (.docx)</p>
         </div>
         """, unsafe_allow_html=True)
@@ -1019,10 +1072,10 @@ def show_main_app(user):
             is_valid, message = validate_excel_structure(df)
             
             if not is_valid:
-                st.markdown(f'<div class="error-msg">❌ {message}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="error-msg">{message}</div>', unsafe_allow_html=True)
                 return
             
-            st.markdown(f'<div class="success-msg">✅ Planilha carregada: {len(df)} funcionários encontrados</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="success-msg">Planilha carregada: {len(df)} funcionários encontrados</div>', unsafe_allow_html=True)
             
             # Estatísticas da planilha
             col1, col2, col3, col4 = st.columns(4)
@@ -1031,7 +1084,7 @@ def show_main_app(user):
                 st.markdown(f"""
                 <div class="metric-card">
                     <h3>{len(df)}</h3>
-                    <p>👥 Funcionários</p>
+                    <p>Funcionários</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -1039,7 +1092,7 @@ def show_main_app(user):
                 st.markdown(f"""
                 <div class="metric-card">
                     <h3>{df['Setor'].nunique()}</h3>
-                    <p>🏢 Setores</p>
+                    <p>Setores</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -1047,7 +1100,7 @@ def show_main_app(user):
                 st.markdown(f"""
                 <div class="metric-card">
                     <h3>{df['Função'].nunique()}</h3>
-                    <p>💼 Funções</p>
+                    <p>Funções</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -1056,12 +1109,12 @@ def show_main_app(user):
                 st.markdown(f"""
                 <div class="metric-card">
                     <h3>{empresa_count}</h3>
-                    <p>🏭 Empresas</p>
+                    <p>Empresas</p>
                 </div>
                 """, unsafe_allow_html=True)
             
             # SELEÇÃO DE FUNCIONÁRIOS COM FILTROS MÚLTIPLOS
-            st.markdown("## 👥 Seleção de Funcionários")
+            st.markdown("## Seleção de Funcionários")
             
             col1, col2 = st.columns(2)
             
@@ -1069,7 +1122,7 @@ def show_main_app(user):
                 # FILTRO POR SETORES (MÚLTIPLA SELEÇÃO)
                 todos_setores = sorted(df['Setor'].dropna().unique().tolist())
                 setores_selecionados = st.multiselect(
-                    "🏢 Filtrar por Setores:",
+                    "Filtrar por Setores:",
                     todos_setores,
                     help="Selecione um ou mais setores. Deixe vazio para incluir todos."
                 )
@@ -1078,7 +1131,7 @@ def show_main_app(user):
                 # FILTRO POR FUNÇÕES (MÚLTIPLA SELEÇÃO)
                 todas_funcoes = sorted(df['Função'].dropna().unique().tolist())
                 funcoes_selecionadas = st.multiselect(
-                    "💼 Filtrar por Funções:",
+                    "Filtrar por Funções:",
                     todas_funcoes,
                     help="Selecione uma ou mais funções. Deixe vazio para incluir todas."
                 )
@@ -1102,13 +1155,13 @@ def show_main_app(user):
                 if funcoes_selecionadas:
                     filtros_aplicados.append(f"Funções: {', '.join(funcoes_selecionadas)}")
                 
-                st.markdown(f'<div class="info-msg">🔍 <strong>Filtros aplicados:</strong><br>• {("<br>• ".join(filtros_aplicados))}<br><strong>Funcionários encontrados:</strong> {len(df_filtrado)}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="info-msg"><strong>Filtros aplicados:</strong><br>• {("<br>• ".join(filtros_aplicados))}<br><strong>Funcionários encontrados:</strong> {len(df_filtrado)}</div>', unsafe_allow_html=True)
             else:
-                st.markdown(f'<div class="info-msg">📋 <strong>Nenhum filtro aplicado</strong> - Mostrando todos os {len(df_filtrado)} funcionários</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="info-msg"><strong>Nenhum filtro aplicado</strong> - Mostrando todos os {len(df_filtrado)} funcionários</div>', unsafe_allow_html=True)
             
             # MODO DE SELEÇÃO
             modo_selecao = st.radio(
-                "📋 Modo de Seleção:",
+                "Modo de Seleção:",
                 ["Funcionário Individual", "Múltiplos Funcionários", "Todos os Funcionários Filtrados"],
                 help="Escolha como selecionar os funcionários para gerar as OS"
             )
@@ -1119,7 +1172,7 @@ def show_main_app(user):
             if modo_selecao == "Funcionário Individual":
                 if len(df_filtrado) > 0:
                     funcionario_individual = st.selectbox(
-                        "👤 Selecione o funcionário:",
+                        "Selecione o funcionário:",
                         [''] + df_filtrado['Nome'].tolist(),
                         help="Escolha um funcionário específico da lista filtrada"
                     )
@@ -1131,7 +1184,7 @@ def show_main_app(user):
             elif modo_selecao == "Múltiplos Funcionários":
                 if len(df_filtrado) > 0:
                     funcionarios_selecionados = st.multiselect(
-                        "👥 Selecione múltiplos funcionários:",
+                        "Selecione múltiplos funcionários:",
                         df_filtrado['Nome'].tolist(),
                         help="Escolha vários funcionários da lista filtrada"
                     )
@@ -1141,17 +1194,17 @@ def show_main_app(user):
             else:  # Todos os funcionários filtrados
                 funcionarios_selecionados = df_filtrado['Nome'].tolist()
                 if funcionarios_selecionados:
-                    st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários filtrados.")
+                    st.info(f"Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários filtrados.")
             
             # Configuração de riscos se há funcionários selecionados
             if funcionarios_selecionados:
-                st.markdown(f'<div class="success-msg">✅ {len(funcionarios_selecionados)} funcionário(s) selecionado(s)</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="success-msg">{len(funcionarios_selecionados)} funcionário(s) selecionado(s)</div>', unsafe_allow_html=True)
                 
-                st.markdown("## ⚠️ Configuração de Riscos Ocupacionais")
+                st.markdown("## Configuração de Riscos Ocupacionais")
                 
                 st.markdown("""
                 <div class="warning-msg">
-                    <strong>📋 IMPORTANTE:</strong><br>
+                    <strong>Importante:</strong><br>
                     • Se nenhum risco for selecionado, o sistema preencherá automaticamente com <strong>"Ausência de Fator de Risco"</strong><br>
                     • Isso garante conformidade com as normas de segurança do trabalho
                 </div>
@@ -1166,7 +1219,7 @@ def show_main_app(user):
                     st.session_state.medidas_preventivas = []
                 
                 # Configurar riscos por categoria
-                st.markdown("### 🔍 Agentes de Riscos por Categoria")
+                st.markdown("### Agentes de Riscos por Categoria")
                 
                 for categoria_key, categoria_nome in CATEGORIAS_RISCO.items():
                     qtd_opcoes = len(AGENTES_POR_CATEGORIA[categoria_key])
@@ -1196,7 +1249,7 @@ def show_main_app(user):
                             )
                         
                         with col4:
-                            if st.button(f"➕", key=f"add_{categoria_key}"):
+                            if st.button(f"Adicionar", key=f"add_{categoria_key}"):
                                 if agente_selecionado != 'Selecione...':
                                     novo_risco = {
                                         'agente': agente_selecionado,
@@ -1204,7 +1257,7 @@ def show_main_app(user):
                                         'unidade': unidade
                                     }
                                     st.session_state.agentes_risco[categoria_key].append(novo_risco)
-                                    st.markdown('<div class="success-msg">✅ Risco adicionado!</div>', unsafe_allow_html=True)
+                                    st.markdown('<div class="success-msg">Risco adicionado</div>', unsafe_allow_html=True)
                                     st.rerun()
                         
                         # Mostrar riscos adicionados
@@ -1220,19 +1273,19 @@ def show_main_app(user):
                                         risco_text += f" {risco['unidade']}"
                                     st.write(risco_text)
                                 with col2:
-                                    if st.button("🗑️", key=f"remove_{categoria_key}_{idx}"):
+                                    if st.button("Remover", key=f"remove_{categoria_key}_{idx}"):
                                         st.session_state.agentes_risco[categoria_key].pop(idx)
                                         st.rerun()
                 
                 # EPIs e Medidas Preventivas
-                st.markdown("### 🥽 EPIs e Medidas Preventivas")
+                st.markdown("### EPIs e Medidas Preventivas")
                 
                 col1, col2 = st.columns(2)
                 
                 with col1:
                     st.markdown("**EPIs Obrigatórios:**")
                     novo_epi = st.text_input("Adicionar EPI:", placeholder="Ex: Capacete, óculos...")
-                    if st.button("➕ Adicionar EPI") and novo_epi:
+                    if st.button("Adicionar EPI") and novo_epi:
                         st.session_state.epis_selecionados.append(novo_epi)
                         st.rerun()
                     
@@ -1241,14 +1294,14 @@ def show_main_app(user):
                         with col_epi1:
                             st.write(f"• {epi}")
                         with col_epi2:
-                            if st.button("🗑️", key=f"remove_epi_{idx}"):
+                            if st.button("X", key=f"remove_epi_{idx}"):
                                 st.session_state.epis_selecionados.pop(idx)
                                 st.rerun()
                 
                 with col2:
                     st.markdown("**Medidas Preventivas:**")
                     nova_medida = st.text_area("Adicionar Medida:", placeholder="Ex: Treinamentos, pausas...", height=100)
-                    if st.button("➕ Adicionar Medida") and nova_medida:
+                    if st.button("Adicionar Medida") and nova_medida:
                         st.session_state.medidas_preventivas.append(nova_medida)
                         st.rerun()
                     
@@ -1258,28 +1311,28 @@ def show_main_app(user):
                             medida_resumida = medida[:100] + "..." if len(medida) > 100 else medida
                             st.write(f"• {medida_resumida}")
                         with col_med2:
-                            if st.button("🗑️", key=f"remove_med_{idx}"):
+                            if st.button("X", key=f"remove_med_{idx}"):
                                 st.session_state.medidas_preventivas.pop(idx)
                                 st.rerun()
                 
                 # Observações
                 observacoes = st.text_area(
-                    "📝 Observações Complementares:",
+                    "Observações Complementares:",
                     placeholder="Informações específicas do setor, procedimentos especiais, etc.",
                     height=80
                 )
                 
                 # Botão para gerar OS
-                st.markdown("## 🚀 Gerar Ordens de Serviço")
+                st.markdown("## Gerar Ordens de Serviço")
                 
                 creditos_necessarios = len(funcionarios_selecionados)
                 tem_creditos_suficientes = check_sufficient_credits(user['id'], creditos_necessarios)
                 
                 if tem_creditos_suficientes:
                     if user.get('is_admin', False):
-                        button_text = f"📄 GERAR {len(funcionarios_selecionados)} OS (GRATUITO - ADMIN)"
+                        button_text = f"Gerar {len(funcionarios_selecionados)} OS (Gratuito - Admin)"
                     else:
-                        button_text = f"📄 GERAR {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)"
+                        button_text = f"Gerar {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)"
                     
                     if st.button(button_text, type="primary"):
                         
@@ -1290,7 +1343,7 @@ def show_main_app(user):
                         
                         # Processar cada funcionário selecionado
                         for idx, nome_funcionario in enumerate(funcionarios_selecionados):
-                            status_text.text(f"🔄 Gerando OS para: {nome_funcionario}")
+                            status_text.text(f"Gerando OS para: {nome_funcionario}")
                             
                             # Buscar dados do funcionário
                             dados_funcionario = df_filtrado[df_filtrado['Nome'] == nome_funcionario].iloc[0].to_dict()
@@ -1324,21 +1377,21 @@ def show_main_app(user):
                         if not user.get('is_admin', False):
                             debit_credits(user['id'], creditos_necessarios)
                         
-                        status_text.text("✅ Geração concluída!")
+                        status_text.text("Geração concluída!")
                         
                         # Disponibilizar downloads
                         if documentos_gerados:
                             if len(documentos_gerados) == 1:
-                                st.markdown('<div class="success-msg">✅ Ordem de Serviço gerada com sucesso!</div>', unsafe_allow_html=True)
+                                st.markdown('<div class="success-msg">Ordem de Serviço gerada com sucesso</div>', unsafe_allow_html=True)
                                 st.download_button(
-                                    label="📥 Download da Ordem de Serviço",
+                                    label="Download da Ordem de Serviço",
                                     data=documentos_gerados[0]['buffer'].getvalue(),
                                     file_name=f"OS_{documentos_gerados[0]['nome']}.docx",
                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                     use_container_width=True
                                 )
                             else:
-                                st.markdown(f'<div class="success-msg">✅ {len(documentos_gerados)} Ordens de Serviço geradas com sucesso!</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="success-msg">{len(documentos_gerados)} Ordens de Serviço geradas com sucesso</div>', unsafe_allow_html=True)
                                 
                                 # Criar arquivo ZIP
                                 zip_buffer = BytesIO()
@@ -1352,7 +1405,7 @@ def show_main_app(user):
                                 zip_buffer.seek(0)
                                 
                                 st.download_button(
-                                    label=f"📥 Download de {len(documentos_gerados)} Ordens de Serviço (ZIP)",
+                                    label=f"Download de {len(documentos_gerados)} Ordens de Serviço (ZIP)",
                                     data=zip_buffer.getvalue(),
                                     file_name=f"Lote_OS_{datetime.date.today().strftime('%d%m%Y')}.zip",
                                     mime="application/zip",
@@ -1362,47 +1415,47 @@ def show_main_app(user):
                             # Mostrar créditos restantes (apenas se não for admin)
                             if not user.get('is_admin', False):
                                 creditos_restantes = get_user_credits(user['id'])
-                                st.markdown(f'<div class="info-msg">💳 {creditos_necessarios} créditos foram debitados. Créditos restantes: {creditos_restantes}</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="info-msg">{creditos_necessarios} créditos foram debitados. Créditos restantes: {creditos_restantes}</div>', unsafe_allow_html=True)
                             else:
-                                st.markdown(f'<div class="info-msg">👑 Geração realizada sem custo (conta administrador)</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="info-msg">Geração realizada sem custo (conta administrador)</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown('<div class="error-msg">❌ Erro: Nenhum documento foi gerado. Verifique as configurações.</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="error-msg">Erro: Nenhum documento foi gerado. Verifique as configurações</div>', unsafe_allow_html=True)
                         
                         time.sleep(2)
                         st.rerun()
                 else:
                     creditos_usuario = get_user_credits(user['id'])
-                    st.markdown(f'<div class="error-msg">⚠️ Créditos insuficientes. Você precisa de {creditos_necessarios} créditos, mas possui apenas {creditos_usuario}.</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="error-msg">Créditos insuficientes. Você precisa de {creditos_necessarios} créditos, mas possui apenas {creditos_usuario}</div>', unsafe_allow_html=True)
         
         except Exception as e:
-            st.markdown(f'<div class="error-msg">❌ Erro ao processar planilha: {str(e)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="error-msg">Erro ao processar planilha: {str(e)}</div>', unsafe_allow_html=True)
     
     else:
         # Instruções iniciais
         total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
         st.markdown(f"""
         <div class="info-msg">
-            <h4>🎯 Como usar o sistema:</h4>
+            <h4>Como usar o sistema:</h4>
             <ol>
-                <li><strong>📤 Faça upload</strong> da planilha Excel com dados dos funcionários</li>
-                <li><strong>📄 Faça upload</strong> do template Word (opcional) - use seu modelo personalizado</li>
-                <li><strong>🏢 Selecione setores</strong> (múltipla seleção disponível)</li>
-                <li><strong>💼 Selecione funções</strong> (múltipla seleção disponível)</li>
-                <li><strong>👥 Escolha</strong> o modo de seleção de funcionários</li>
-                <li><strong>⚠️ Configure</strong> os riscos ocupacionais específicos</li>
-                <li><strong>🥽 Adicione</strong> EPIs e medidas preventivas</li>
-                <li><strong>🚀 Gere</strong> as Ordens de Serviço conforme NR-01</li>
+                <li><strong>Faça upload</strong> da planilha Excel com dados dos funcionários</li>
+                <li><strong>Faça upload</strong> do template Word (opcional) - use seu modelo personalizado</li>
+                <li><strong>Selecione setores</strong> (múltipla seleção disponível)</li>
+                <li><strong>Selecione funções</strong> (múltipla seleção disponível)</li>
+                <li><strong>Escolha</strong> o modo de seleção de funcionários</li>
+                <li><strong>Configure</strong> os riscos ocupacionais específicos</li>
+                <li><strong>Adicione</strong> EPIs e medidas preventivas</li>
+                <li><strong>Gere</strong> as Ordens de Serviço conforme NR-01</li>
             </ol>
             
-            <p><strong>🆕 Funcionalidades implementadas:</strong></p>
+            <p><strong>Funcionalidades implementadas:</strong></p>
             <ul>
-                <li>✅ <strong>Filtro múltiplo por setores</strong> - Selecione vários setores simultaneamente</li>
-                <li>✅ <strong>Filtro múltiplo por funções</strong> - Selecione várias funções simultaneamente</li>
-                <li>✅ <strong>Template personalizado</strong> - Upload do seu modelo Word</li>
-                <li>✅ <strong>Preenchimento automático</strong> - "Ausência de Fator de Risco" quando necessário</li>
-                <li>✅ <strong>Validação de email</strong> - Apenas emails de provedores válidos</li>
-                <li>✅ <strong>Tema totalmente preto</strong> - Interface dark profissional</li>
-                <li>✅ <strong>{total_riscos} opções de riscos</strong> organizados em 5 categorias</li>
+                <li>Filtro múltiplo por setores - Selecione vários setores simultaneamente</li>
+                <li>Filtro múltiplo por funções - Selecione várias funções simultaneamente</li>
+                <li>Template personalizado - Upload do seu modelo Word</li>
+                <li>Preenchimento automático - "Ausência de Fator de Risco" quando necessário</li>
+                <li>Validação de email - Apenas emails de provedores válidos</li>
+                <li>Tema minimalista - Interface clean e profissional</li>
+                <li>{total_riscos} opções de riscos organizados em 5 categorias</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
