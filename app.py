@@ -233,7 +233,7 @@ def obter_dados_pgr():
 
 def substituir_placeholders(doc, contexto):
     """
-    Substitui placeholders com formatação estável e alinhamento à esquerda para medições.
+    Substitui placeholders preservando a formatação do template.
     """
     def aplicar_formatacao_padrao(run):
         """Aplica formatação Segoe UI 9pt"""
@@ -244,108 +244,90 @@ def substituir_placeholders(doc, contexto):
     def processar_paragrafo(p):
         texto_original_paragrafo = p.text
 
-        # --- Lógica revisada e simplificada para [MEDIÇÕES] ---
+        # --- Lógica CORRIGIDA E MANTIDA para [MEDIÇÕES] ---
         if "[MEDIÇÕES]" in texto_original_paragrafo:
-            # Limpa o parágrafo, removendo o placeholder "[MEDIÇÕES]"
             for run in p.runs:
                 run.text = ''
-            
-            # Garante alinhamento à esquerda para o parágrafo
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
             medicoes_valor = contexto.get("[MEDIÇÕES]", "Não aplicável")
-
             if medicoes_valor == "Não aplicável" or not medicoes_valor.strip():
                 run = aplicar_formatacao_padrao(p.add_run("Não aplicável"))
                 run.font.bold = False
             else:
                 linhas = medicoes_valor.split('\n')
                 for i, linha in enumerate(linhas):
-                    if not linha.strip():
-                        continue
-
-                    # Adiciona quebra de linha antes do item, exceto para o primeiro
-                    if i > 0:
-                        p.add_run().add_break()
-
+                    if not linha.strip(): continue
+                    if i > 0: p.add_run().add_break()
                     if ":" in linha:
                         partes = linha.split(":", 1)
                         agente_texto = partes[0].strip() + ":"
                         valor_texto = partes[1].strip()
-
-                        # Adiciona o agente em negrito
                         run_agente = aplicar_formatacao_padrao(p.add_run(agente_texto + " "))
                         run_agente.font.bold = True
-
-                        # Adiciona o valor sem negrito
                         run_valor = aplicar_formatacao_padrao(p.add_run(valor_texto))
                         run_valor.font.bold = False
                     else:
-                        # Se não houver ':', adiciona a linha inteira sem formatação especial
                         run_simples = aplicar_formatacao_padrao(p.add_run(linha))
                         run_simples.font.bold = False
-            return # Finaliza o processamento para este parágrafo
+            return
 
-        # --- Lógica para outros placeholders (sem alterações) ---
-        texto_modificado = texto_original_paragrafo
-        placeholders_no_paragrafo = [key for key in contexto.keys() if key in texto_original_paragrafo]
-
+        # --- Lógica RESTAURADA E CORRIGIDA para outros placeholders ---
+        placeholders_no_paragrafo = [key for key in contexto if key in texto_original_paragrafo]
         if not placeholders_no_paragrafo:
-            return # Nenhum placeholder encontrado, pula para o próximo parágrafo
+            return
 
-        # Substitui todos os placeholders para ter o texto final
-        for key, value in contexto.items():
-            texto_modificado = texto_modificado.replace(str(key), str(value))
+        # Preserva o estilo do primeiro 'run', que geralmente define o estilo do rótulo no template
+        estilo_rotulo = {
+            'bold': p.runs[0].bold if p.runs else False,
+            'italic': p.runs[0].italic if p.runs else False,
+            'underline': p.runs[0].underline if p.runs else False,
+        }
 
-        # Limpa os runs existentes e reescreve o parágrafo com a formatação correta
-        # Isso garante que a formatação (negrito/itálico) do rótulo seja preservada
-        runs_originais = list(p.runs)
+        # Substitui todos os placeholders para obter o texto final
+        texto_final = texto_original_paragrafo
+        for key in placeholders_no_paragrafo:
+            texto_final = texto_final.replace(key, str(contexto[key]))
+        
+        # Limpa o parágrafo para reescrevê-lo com a formatação correta
         p.clear()
 
-        texto_acumulado = ""
-        for key in placeholders_no_paragrafo:
-            partes = texto_original_paragrafo.split(key, 1)
+        # Reconstrói o parágrafo, aplicando o estilo do rótulo e deixando os valores sem formatação
+        texto_restante = texto_final
+        for i, key in enumerate(placeholders_no_paragrafo):
+            valor_placeholder = str(contexto[key])
+            partes = texto_restante.split(valor_placeholder, 1)
             
-            # Adiciona o texto antes do placeholder, mantendo a formatação original
-            texto_antes = partes[0].replace(texto_acumulado, "", 1)
-            if texto_antes:
-                run_antes = aplicar_formatacao_padrao(p.add_run(texto_antes))
-                # Tenta reaplicar a formatação original do run correspondente
-                for r_orig in runs_originais:
-                    if r_orig.text and texto_antes in r_orig.text:
-                        run_antes.bold = r_orig.bold
-                        run_antes.italic = r_orig.italic
-                        run_antes.underline = r_orig.underline
-                        break
+            # Adiciona o texto antes do valor (que é o rótulo) com o estilo preservado
+            if partes[0]:
+                run_rotulo = aplicar_formatacao_padrao(p.add_run(partes[0]))
+                run_rotulo.font.bold = estilo_rotulo['bold']
+                run_rotulo.font.italic = estilo_rotulo['italic']
+                run_rotulo.underline = estilo_rotulo['underline']
 
-            # Adiciona o valor do placeholder sem negrito
-            valor_substituido = str(contexto[key])
-            run_valor = aplicar_formatacao_padrao(p.add_run(valor_substituido))
-            run_valor.font.bold = False # Força o valor a não ser negrito
+            # Adiciona o valor do placeholder sem formatação
+            run_valor = aplicar_formatacao_padrao(p.add_run(valor_placeholder))
+            run_valor.font.bold = False
+            run_valor.font.italic = False
+            run_valor.font.underline = False
+            
+            texto_restante = partes[1]
 
-            texto_original_paragrafo = partes[1]
-            texto_acumulado += partes[0] + key
+        # Adiciona qualquer texto que sobrar no final, com o estilo do rótulo
+        if texto_restante:
+            run_final = aplicar_formatacao_padrao(p.add_run(texto_restante))
+            run_final.font.bold = estilo_rotulo['bold']
+            run_final.font.italic = estilo_rotulo['italic']
+            run_final.underline = estilo_rotulo['underline']
 
-        # Adiciona o restante do texto no parágrafo
-        if texto_original_paragrafo:
-            run_resto = aplicar_formatacao_padrao(p.add_run(texto_original_paragrafo))
-            for r_orig in runs_originais:
-                if r_orig.text and texto_original_paragrafo in r_orig.text:
-                    run_resto.bold = r_orig.bold
-                    run_resto.italic = r_orig.italic
-                    run_resto.underline = r_orig.underline
-                    break
-
-    # Processar parágrafos em tabelas
+    # Processar parágrafos em tabelas e no corpo do documento
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for p in cell.paragraphs:
                     processar_paragrafo(p)
-
-    # Processar parágrafos fora de tabelas
     for p in doc.paragraphs:
         processar_paragrafo(p)
+
 
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
