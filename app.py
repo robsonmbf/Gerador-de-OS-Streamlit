@@ -1246,9 +1246,9 @@ def show_main_app(user):
                             if st.button(f"Adicionar Risco", key=f"add_{categoria_key}"):
                                 if agente_selecionado != 'Selecione...':
                                     novo_risco = {
-                                        \'agente\': agente_selecionado,
-                                        \'intensidade\': \'\',
-                                        \'unidade\': \'Não aplicável\'
+                                        'agente': agente_selecionado,
+                                        'intensidade': '',
+                                        'unidade': 'Não aplicável'
                                     }
                                     st.session_state.agentes_risco[categoria_key].append(novo_risco)
                                     st.markdown(\'<div class="success-msg">Risco adicionado</div>\', unsafe_allow_html=True)
