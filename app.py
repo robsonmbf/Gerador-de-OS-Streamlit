@@ -220,18 +220,18 @@ CATEGORIAS_RISCO = {
     'acidente': '⚠️ Acidentes'
 }
 
-# --- CSS PERSONALIZADO LIMPO ---
+# --- CSS TOTALMENTE PRETO ---
 st.markdown("""
 <style>
-    /* TEMA DARK MODERNO */
+    /* FUNDO TOTALMENTE PRETO */
     .stApp {
-        background: #1a1a2e;
-        color: #ffffff;
+        background: #000000 !important;
+        color: #ffffff !important;
     }
     
     .main {
-        background: #1a1a2e;
-        color: #ffffff;
+        background: #000000 !important;
+        color: #ffffff !important;
     }
     
     /* OCULTAR HEADER COMPLETAMENTE */
@@ -249,11 +249,11 @@ st.markdown("""
     /* TÍTULO PRINCIPAL */
     .title-header {
         text-align: center;
-        color: #4CAF50;
+        color: #00ff00;
         font-size: 3rem;
         font-weight: bold;
         margin: 2rem 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        text-shadow: 2px 2px 4px rgba(0,255,0,0.5);
     }
     
     /* FORMULÁRIO DE LOGIN */
@@ -261,23 +261,23 @@ st.markdown("""
         max-width: 500px;
         margin: 2rem auto;
         padding: 2rem;
-        background: #16213e;
+        background: #111111;
         border-radius: 15px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        border: 1px solid #0f3460;
+        box-shadow: 0 8px 32px rgba(0,255,0,0.2);
+        border: 2px solid #00ff00;
     }
     
     .login-title {
         text-align: center;
-        color: #4CAF50;
+        color: #00ff00;
         font-size: 2rem;
         margin-bottom: 2rem;
     }
     
     /* BOTÕES */
     .stButton > button {
-        background: linear-gradient(135deg, #4CAF50, #45a049);
-        color: white;
+        background: linear-gradient(135deg, #00ff00, #00cc00);
+        color: black;
         border: none;
         border-radius: 10px;
         padding: 0.75rem 1.5rem;
@@ -288,65 +288,93 @@ st.markdown("""
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #45a049, #3d8b40);
+        background: linear-gradient(135deg, #00cc00, #009900);
         transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        box-shadow: 0 5px 15px rgba(0, 255, 0, 0.4);
     }
     
     /* INPUTS */
     .stTextInput > div > div > input {
-        background: #0f1419;
-        color: white;
-        border: 2px solid #0f3460;
-        border-radius: 8px;
-        padding: 0.75rem;
+        background: #111111 !important;
+        color: white !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
+        padding: 0.75rem !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #4CAF50;
-        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        border-color: #00ff00 !important;
+        box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2) !important;
+    }
+    
+    /* SELECTBOX */
+    .stSelectbox > div > div {
+        background: #111111 !important;
+        color: white !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] {
+        background: #111111 !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
+    }
+    
+    /* MULTISELECT */
+    .stMultiSelect > div > div {
+        background: #111111 !important;
+        color: white !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
+    }
+    
+    .stMultiSelect [data-baseweb="select"] {
+        background: #111111 !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
     }
     
     /* MENSAGENS */
     .success-msg {
-        background: rgba(76, 175, 80, 0.1);
-        border: 1px solid #4CAF50;
+        background: rgba(0, 255, 0, 0.1);
+        border: 1px solid #00ff00;
         border-radius: 8px;
         padding: 1rem;
-        color: #4CAF50;
+        color: #00ff00;
         margin: 1rem 0;
     }
     
     .error-msg {
-        background: rgba(244, 67, 54, 0.1);
-        border: 1px solid #f44336;
+        background: rgba(255, 0, 0, 0.1);
+        border: 1px solid #ff0000;
         border-radius: 8px;
         padding: 1rem;
-        color: #f44336;
-        margin: 1rem 0;
-    }
-    
-    .warning-msg {
-        background: rgba(255, 193, 7, 0.1);
-        border: 1px solid #ffc107;
-        border-radius: 8px;
-        padding: 1rem;
-        color: #ffc107;
+        color: #ff0000;
         margin: 1rem 0;
     }
     
     .info-msg {
-        background: rgba(33, 150, 243, 0.1);
-        border: 1px solid #2196F3;
+        background: rgba(0, 255, 255, 0.1);
+        border: 1px solid #00ffff;
         border-radius: 8px;
         padding: 1rem;
-        color: #2196F3;
+        color: #00ffff;
+        margin: 1rem 0;
+    }
+    
+    .warning-msg {
+        background: rgba(255, 255, 0, 0.1);
+        border: 1px solid #ffff00;
+        border-radius: 8px;
+        padding: 1rem;
+        color: #ffff00;
         margin: 1rem 0;
     }
     
     /* TABS */
     .stTabs [data-baseweb="tab-list"] {
-        background: #16213e;
+        background: #111111;
         border-radius: 10px 10px 0 0;
     }
     
@@ -356,19 +384,19 @@ st.markdown("""
     }
     
     .stTabs [aria-selected="true"] {
-        background: #4CAF50 !important;
-        color: white !important;
+        background: #00ff00 !important;
+        color: black !important;
     }
     
     /* SIDEBAR */
     .css-1d391kg {
-        background: #16213e;
+        background: #111111 !important;
     }
     
     /* UPLOAD AREAS */
     .upload-area {
-        background: #16213e;
-        border: 2px dashed #4CAF50;
+        background: #111111;
+        border: 2px dashed #00ff00;
         border-radius: 10px;
         padding: 2rem;
         text-align: center;
@@ -378,16 +406,16 @@ st.markdown("""
     
     /* CARDS */
     .metric-card {
-        background: #16213e;
+        background: #111111;
         padding: 1.5rem;
         border-radius: 10px;
         text-align: center;
-        border: 1px solid #0f3460;
+        border: 1px solid #333333;
         margin: 0.5rem 0;
     }
     
     .metric-card h3 {
-        color: #4CAF50;
+        color: #00ff00;
         font-size: 2rem;
         margin-bottom: 0.5rem;
     }
@@ -399,62 +427,81 @@ st.markdown("""
     
     /* EXPANSORES */
     .streamlit-expanderHeader {
-        background: #16213e !important;
-        border: 1px solid #0f3460 !important;
+        background: #111111 !important;
+        border: 1px solid #333333 !important;
         border-radius: 8px !important;
         color: white !important;
     }
     
     .streamlit-expanderContent {
-        background: #1a1a2e !important;
-        border: 1px solid #0f3460 !important;
+        background: #000000 !important;
+        border: 1px solid #333333 !important;
         color: white !important;
     }
     
-    /* MULTISELECT CUSTOMIZADO */
-    .stMultiSelect [data-baseweb="select"] {
-        background: #16213e;
-        border: 2px solid #0f3460;
-        border-radius: 8px;
+    /* TEXT AREAS */
+    .stTextArea > div > div > textarea {
+        background: #111111 !important;
+        color: white !important;
+        border: 2px solid #333333 !important;
+        border-radius: 8px !important;
     }
     
-    .stMultiSelect [data-baseweb="select"]:hover {
-        border-color: #4CAF50;
+    .stTextArea > div > div > textarea:focus {
+        border-color: #00ff00 !important;
+        box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2) !important;
     }
     
-    /* SELECTBOX CUSTOMIZADO */
-    .stSelectbox [data-baseweb="select"] {
-        background: #16213e;
-        border: 2px solid #0f3460;
-        border-radius: 8px;
+    /* RADIO BUTTONS */
+    .stRadio > div {
+        background: transparent !important;
+        color: white !important;
+    }
+    
+    /* PROGRESS BAR */
+    .stProgress > div > div > div {
+        background: #00ff00 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SISTEMA DE AUTENTICAÇÃO APRIMORADO ---
+# --- VALIDAÇÃO DE EMAIL ---
+def is_valid_email(email):
+    """Valida se o email é de um provedor real (Gmail, Outlook, etc.)"""
+    if not email or '@' not in email:
+        return False
+    
+    # Padrão básico de email
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False
+    
+    # Verificar provedores válidos
+    valid_domains = [
+        'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'yahoo.com.br',
+        'uol.com.br', 'terra.com.br', 'bol.com.br', 'ig.com.br', 'globo.com',
+        'live.com', 'msn.com', 'icloud.com', 'me.com', 'mac.com',
+        'protonmail.com', 'zoho.com', 'yandex.com'
+    ]
+    
+    domain = email.split('@')[1].lower()
+    return domain in valid_domains
+
+# --- SISTEMA DE AUTENTICAÇÃO ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def initialize_users():
     if 'users_db' not in st.session_state:
         st.session_state.users_db = {
-            'admin@teste.com': {
-                'id': 1,
-                'password': hash_password('admin123'),
-                'nome': 'Administrador',
-                'empresa': 'Empresa Teste',
-                'email': 'admin@teste.com',
-                'credits': 1000,
-                'is_admin': False
-            },
             'robsonmbf@hotmail.com': {
-                'id': 2,
+                'id': 1,
                 'password': hash_password('123456'),
                 'nome': 'Robson',
                 'empresa': 'Minha Empresa',
                 'email': 'robsonmbf@hotmail.com',
-                'credits': 999999,  # Créditos ilimitados
-                'is_admin': True    # Admin não consome créditos
+                'credits': 999999,
+                'is_admin': True
             }
         }
 
@@ -491,7 +538,7 @@ def get_user_credits(user_id):
     for user in st.session_state.users_db.values():
         if user['id'] == user_id:
             if user.get('is_admin', False):
-                return "∞"  # Mostrar infinito para admin
+                return "∞"
             return user['credits']
     return 0
 
@@ -500,7 +547,7 @@ def debit_credits(user_id, amount):
     for user in st.session_state.users_db.values():
         if user['id'] == user_id:
             if user.get('is_admin', False):
-                return True  # Admin não consome créditos
+                return True
             user['credits'] = max(0, user['credits'] - amount)
             return True
     return False
@@ -510,11 +557,11 @@ def check_sufficient_credits(user_id, amount):
     for user in st.session_state.users_db.values():
         if user['id'] == user_id:
             if user.get('is_admin', False):
-                return True  # Admin sempre tem créditos suficientes
+                return True
             return user['credits'] >= amount
     return False
 
-# --- FUNÇÕES AUXILIARES APRIMORADAS ---
+# --- FUNÇÕES AUXILIARES ---
 def create_sample_data():
     sample_data = {
         'Nome': ['JOÃO SILVA SANTOS', 'MARIA OLIVEIRA COSTA', 'PEDRO ALVES FERREIRA'],
@@ -542,33 +589,6 @@ def validate_excel_structure(df):
         return False, "A planilha está vazia"
     
     return True, "Estrutura válida"
-
-def check_duplicate_functions_across_sectors(df):
-    """Verifica se há funções duplicadas em setores diferentes"""
-    function_sector_map = {}
-    duplicates = []
-    
-    for _, row in df.iterrows():
-        funcao = row['Função']
-        setor = row['Setor']
-        
-        if funcao in function_sector_map:
-            if setor not in function_sector_map[funcao]:
-                function_sector_map[funcao].append(setor)
-                if len(function_sector_map[funcao]) == 2:  # Primeira duplicata encontrada
-                    duplicates.append({
-                        'funcao': funcao,
-                        'setores': function_sector_map[funcao].copy()
-                    })
-                elif len(function_sector_map[funcao]) > 2:  # Mais setores para a mesma função
-                    # Atualizar a lista de setores para essa função
-                    for dup in duplicates:
-                        if dup['funcao'] == funcao:
-                            dup['setores'] = function_sector_map[funcao].copy()
-        else:
-            function_sector_map[funcao] = [setor]
-    
-    return duplicates
 
 def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventivas, observacoes, template_doc=None):
     try:
@@ -671,7 +691,7 @@ def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventiv
         st.error(f"Erro ao gerar documento: {str(e)}")
         return None
 
-# --- FUNÇÃO DE LOGIN ATUALIZADA ---
+# --- FUNÇÃO DE LOGIN ---
 def show_login_page():
     st.markdown('<div class="title-header">🔐 Gerador de Ordens de Serviço (OS)</div>', unsafe_allow_html=True)
     
@@ -686,7 +706,7 @@ def show_login_page():
         🔥 <strong>Físicos:</strong> {len(RISCOS_FISICO)} opções ampliadas<br>
         ⚗️ <strong>Químicos:</strong> {len(RISCOS_QUIMICO)} opções específicas<br>
         🦠 <strong>Biológicos:</strong> {len(RISCOS_BIOLOGICO)} incluindo COVID-19<br><br>
-        📄 Sistema profissional conforme NR-01 com interface dark!
+        📄 Sistema profissional conforme NR-01 com tema black!
     </div>
     """, unsafe_allow_html=True)
     
@@ -697,23 +717,25 @@ def show_login_page():
         st.markdown('<div class="login-title">🔑 Faça seu Login</div>', unsafe_allow_html=True)
         
         with st.form("login_form"):
-            # NÃO mostrar contas de teste publicamente
-            email = st.text_input("📧 Email:", placeholder="seu@email.com")
+            email = st.text_input("📧 Email:", placeholder="seu@gmail.com")
             password = st.text_input("🔒 Senha:", type="password", placeholder="Sua senha")
             
             login_button = st.form_submit_button("🚀 Entrar")
             
             if login_button:
                 if email and password:
-                    user = authenticate_user(email, password)
-                    if user:
-                        st.session_state.user = user
-                        st.session_state.authenticated = True
-                        st.markdown('<div class="success-msg">✅ Login realizado com sucesso!</div>', unsafe_allow_html=True)
-                        time.sleep(1)
-                        st.rerun()
+                    if is_valid_email(email):
+                        user = authenticate_user(email, password)
+                        if user:
+                            st.session_state.user = user
+                            st.session_state.authenticated = True
+                            st.markdown('<div class="success-msg">✅ Login realizado com sucesso!</div>', unsafe_allow_html=True)
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.markdown('<div class="error-msg">❌ Email ou senha incorretos.</div>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div class="error-msg">❌ Email ou senha incorretos.</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="error-msg">❌ Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
         
@@ -730,7 +752,7 @@ def show_login_page():
             with col2:
                 empresa = st.text_input("🏢 Empresa:", placeholder="Nome da empresa")
             
-            email = st.text_input("📧 Email:", placeholder="seu@email.com")
+            email = st.text_input("📧 Email:", placeholder="seu@gmail.com")
             
             col3, col4 = st.columns(2)
             with col3:
@@ -742,17 +764,20 @@ def show_login_page():
             
             if register_button:
                 if nome and empresa and email and password and password_confirm:
-                    if password == password_confirm:
-                        if len(password) >= 6:
-                            user_id = register_user(email, password, nome, empresa)
-                            if user_id:
-                                st.markdown('<div class="success-msg">✅ Conta criada com sucesso! Faça login para continuar.</div>', unsafe_allow_html=True)
+                    if is_valid_email(email):
+                        if password == password_confirm:
+                            if len(password) >= 6:
+                                user_id = register_user(email, password, nome, empresa)
+                                if user_id:
+                                    st.markdown('<div class="success-msg">✅ Conta criada com sucesso! Faça login para continuar.</div>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown('<div class="error-msg">❌ Erro ao criar conta. Email já pode estar em uso.</div>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<div class="error-msg">❌ Erro ao criar conta. Email já pode estar em uso.</div>', unsafe_allow_html=True)
+                                st.markdown('<div class="error-msg">❌ A senha deve ter pelo menos 6 caracteres.</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown('<div class="error-msg">❌ A senha deve ter pelo menos 6 caracteres.</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="error-msg">❌ As senhas não coincidem.</div>', unsafe_allow_html=True)
                     else:
-                        st.markdown('<div class="error-msg">❌ As senhas não coincidem.</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="error-msg">❌ Email deve ser de um provedor válido (Gmail, Outlook, Yahoo, etc.)</div>', unsafe_allow_html=True)
                 else:
                     st.markdown('<div class="error-msg">⚠️ Por favor, preencha todos os campos.</div>', unsafe_allow_html=True)
         
@@ -888,15 +913,6 @@ def show_main_app(user):
             
             st.markdown(f'<div class="success-msg">✅ Planilha carregada: {len(df)} funcionários encontrados</div>', unsafe_allow_html=True)
             
-            # Verificar funções duplicadas em setores diferentes
-            duplicates = check_duplicate_functions_across_sectors(df)
-            if duplicates:
-                st.markdown('<div class="warning-msg"><strong>⚠️ ATENÇÃO - Funções Duplicadas Encontradas:</strong><br><br>', unsafe_allow_html=True)
-                for dup in duplicates:
-                    setores_text = ", ".join(dup['setores'])
-                    st.markdown(f"• **{dup['funcao']}** encontrada nos setores: **{setores_text}**<br>", unsafe_allow_html=True)
-                st.markdown('<br>Recomenda-se revisar se os riscos são os mesmos para esta função em setores diferentes.</div>', unsafe_allow_html=True)
-            
             # Estatísticas da planilha
             col1, col2, col3, col4 = st.columns(4)
             
@@ -933,61 +949,88 @@ def show_main_app(user):
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Seleção de funcionários MELHORADA
+            # SELEÇÃO DE FUNCIONÁRIOS COM FILTROS MÚLTIPLOS
             st.markdown("## 👥 Seleção de Funcionários")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                # SELEÇÃO MÚLTIPLA DE SETORES
+                # FILTRO POR SETORES (MÚLTIPLA SELEÇÃO)
                 todos_setores = sorted(df['Setor'].dropna().unique().tolist())
                 setores_selecionados = st.multiselect(
-                    "🏢 Selecione os Setores:",
+                    "🏢 Filtrar por Setores:",
                     todos_setores,
-                    help="Selecione um ou mais setores. Se nenhum for selecionado, todos serão incluídos."
+                    help="Selecione um ou mais setores. Deixe vazio para incluir todos."
                 )
-                
-                # Se nenhum setor for selecionado, incluir todos
-                if not setores_selecionados:
-                    df_filtrado = df
-                    st.info("📋 Todos os setores estão incluídos (nenhum selecionado)")
-                else:
-                    df_filtrado = df[df['Setor'].isin(setores_selecionados)]
-                    setores_text = ", ".join(setores_selecionados)
-                    st.success(f"📋 Filtrando por: {setores_text}")
             
             with col2:
-                modo_selecao = st.radio(
-                    "📋 Modo de Seleção:",
-                    ["Funcionário Individual", "Múltiplos Funcionários", "Todos dos Setores Selecionados"]
+                # FILTRO POR FUNÇÕES (MÚLTIPLA SELEÇÃO)
+                todas_funcoes = sorted(df['Função'].dropna().unique().tolist())
+                funcoes_selecionadas = st.multiselect(
+                    "💼 Filtrar por Funções:",
+                    todas_funcoes,
+                    help="Selecione uma ou mais funções. Deixe vazio para incluir todas."
                 )
             
-            # Lógica de seleção APRIMORADA
+            # APLICAR FILTROS
+            df_filtrado = df.copy()
+            
+            # Filtrar por setores se selecionados
+            if setores_selecionados:
+                df_filtrado = df_filtrado[df_filtrado['Setor'].isin(setores_selecionados)]
+            
+            # Filtrar por funções se selecionadas
+            if funcoes_selecionadas:
+                df_filtrado = df_filtrado[df_filtrado['Função'].isin(funcoes_selecionadas)]
+            
+            # Mostrar informações dos filtros aplicados
+            if setores_selecionados or funcoes_selecionadas:
+                filtros_aplicados = []
+                if setores_selecionados:
+                    filtros_aplicados.append(f"Setores: {', '.join(setores_selecionados)}")
+                if funcoes_selecionadas:
+                    filtros_aplicados.append(f"Funções: {', '.join(funcoes_selecionadas)}")
+                
+                st.markdown(f'<div class="info-msg">🔍 <strong>Filtros aplicados:</strong><br>• {("<br>• ".join(filtros_aplicados))}<br><strong>Funcionários encontrados:</strong> {len(df_filtrado)}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="info-msg">📋 <strong>Nenhum filtro aplicado</strong> - Mostrando todos os {len(df_filtrado)} funcionários</div>', unsafe_allow_html=True)
+            
+            # MODO DE SELEÇÃO
+            modo_selecao = st.radio(
+                "📋 Modo de Seleção:",
+                ["Funcionário Individual", "Múltiplos Funcionários", "Todos os Funcionários Filtrados"],
+                help="Escolha como selecionar os funcionários para gerar as OS"
+            )
+            
+            # LÓGICA DE SELEÇÃO
             funcionarios_selecionados = []
             
             if modo_selecao == "Funcionário Individual":
-                funcionario_individual = st.selectbox(
-                    "👤 Selecione o funcionário:",
-                    [''] + df_filtrado['Nome'].tolist(),
-                    help="Escolha um funcionário específico da lista filtrada"
-                )
-                if funcionario_individual:
-                    funcionarios_selecionados = [funcionario_individual]
+                if len(df_filtrado) > 0:
+                    funcionario_individual = st.selectbox(
+                        "👤 Selecione o funcionário:",
+                        [''] + df_filtrado['Nome'].tolist(),
+                        help="Escolha um funcionário específico da lista filtrada"
+                    )
+                    if funcionario_individual:
+                        funcionarios_selecionados = [funcionario_individual]
+                else:
+                    st.warning("Nenhum funcionário encontrado com os filtros aplicados.")
             
             elif modo_selecao == "Múltiplos Funcionários":
-                funcionarios_selecionados = st.multiselect(
-                    "👥 Selecione múltiplos funcionários:",
-                    df_filtrado['Nome'].tolist(),
-                    help="Escolha vários funcionários mantendo Ctrl pressionado"
-                )
+                if len(df_filtrado) > 0:
+                    funcionarios_selecionados = st.multiselect(
+                        "👥 Selecione múltiplos funcionários:",
+                        df_filtrado['Nome'].tolist(),
+                        help="Escolha vários funcionários da lista filtrada"
+                    )
+                else:
+                    st.warning("Nenhum funcionário encontrado com os filtros aplicados.")
             
-            else:  # Todos dos setores selecionados
+            else:  # Todos os funcionários filtrados
                 funcionarios_selecionados = df_filtrado['Nome'].tolist()
                 if funcionarios_selecionados:
-                    if setores_selecionados:
-                        st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários dos setores selecionados.")
-                    else:
-                        st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários de todos os setores.")
+                    st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários filtrados.")
             
             # Configuração de riscos se há funcionários selecionados
             if funcionarios_selecionados:
@@ -1223,17 +1266,20 @@ def show_main_app(user):
             <h4>🎯 Como usar o sistema:</h4>
             <ol>
                 <li><strong>📤 Faça upload</strong> da planilha Excel com dados dos funcionários</li>
-                <li><strong>🏢 Selecione</strong> um ou mais setores (ou deixe vazio para todos)</li>
+                <li><strong>🏢 Selecione setores</strong> (múltipla seleção disponível)</li>
+                <li><strong>💼 Selecione funções</strong> (múltipla seleção disponível)</li>
                 <li><strong>👥 Escolha</strong> o modo de seleção de funcionários</li>
                 <li><strong>⚠️ Configure</strong> os riscos ocupacionais específicos</li>
                 <li><strong>🥽 Adicione</strong> EPIs e medidas preventivas</li>
                 <li><strong>🚀 Gere</strong> as Ordens de Serviço conforme NR-01</li>
             </ol>
             
-            <p><strong>🆕 Novidades desta versão:</strong></p>
+            <p><strong>🆕 Funcionalidades implementadas:</strong></p>
             <ul>
-                <li>✅ <strong>Seleção múltipla de setores</strong> - Escolha vários setores simultaneamente</li>
-                <li>✅ <strong>Detecção de funções duplicadas</strong> - Sistema alerta sobre mesma função em setores diferentes</li>
+                <li>✅ <strong>Filtro múltiplo por setores</strong> - Selecione vários setores simultaneamente</li>
+                <li>✅ <strong>Filtro múltiplo por funções</strong> - Selecione várias funções simultaneamente</li>
+                <li>✅ <strong>Validação de email</strong> - Apenas emails de provedores válidos</li>
+                <li>✅ <strong>Tema totalmente preto</strong> - Interface dark profissional</li>
                 <li>✅ <strong>{total_riscos} opções de riscos</strong> organizados em 5 categorias</li>
             </ul>
         </div>
