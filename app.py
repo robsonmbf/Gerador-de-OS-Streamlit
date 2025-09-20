@@ -535,7 +535,7 @@ def is_valid_email(email):
     domain = email.split('@')[1].lower()
     return domain in valid_domains
 
-# --- SISTEMA DE AUTENTICAÇÃO ---
+# --- SISTEMA DE AUTENTICAÇÃO CORRIGIDO ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -544,7 +544,7 @@ def initialize_users():
         st.session_state.users_db = {
             'robsonmbf@hotmail.com': {
                 'id': 1,
-                'password': hash_password('123456'),
+                'password': hash_password('robsonmb21'),  # SENHA ALTERADA
                 'nome': 'Robson',
                 'empresa': 'Minha Empresa',
                 'email': 'robsonmbf@hotmail.com',
@@ -715,7 +715,7 @@ def substituir_placeholders_no_documento(doc, dados_funcionario, agentes_risco, 
         for paragrafo in doc.paragraphs:
             for placeholder, valor in substituicoes.items():
                 if placeholder in paragrafo.text:
-                    paragrafo.text = paragrafo.text.replace(placeholder, valor)
+                    paragrafo.text = paragrafo.text.replace(placeholder, str(valor))
         
         # Substituir nas tabelas (se houver)
         for tabela in doc.tables:
@@ -723,7 +723,7 @@ def substituir_placeholders_no_documento(doc, dados_funcionario, agentes_risco, 
                 for celula in linha.cells:
                     for placeholder, valor in substituicoes.items():
                         if placeholder in celula.text:
-                            celula.text = celula.text.replace(placeholder, valor)
+                            celula.text = celula.text.replace(placeholder, str(valor))
         
         return doc
         
@@ -849,7 +849,7 @@ def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventiv
         st.error(f"Erro ao gerar documento: {str(e)}")
         return None
 
-# --- FUNÇÃO DE LOGIN ---
+# --- FUNÇÃO DE LOGIN CORRIGIDA ---
 def show_login_page():
     st.markdown('<div class="title-header">Gerador de Ordens de Serviço</div>', unsafe_allow_html=True)
     
@@ -874,15 +874,7 @@ def show_login_page():
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
         st.markdown('<div class="login-title">Acesso ao Sistema</div>', unsafe_allow_html=True)
         
-        # MOSTRAR DADOS DE ACESSO ADMIN
-        st.markdown("""
-        <div class="warning-msg">
-            <strong>👑 Dados de Acesso Administrador:</strong><br>
-            📧 <strong>Email:</strong> robsonmbf@hotmail.com<br>
-            🔒 <strong>Senha:</strong> 123456<br>
-            💳 <strong>Créditos:</strong> Ilimitados
-        </div>
-        """, unsafe_allow_html=True)
+        # DADOS DE ACESSO ADMIN REMOVIDOS CONFORME SOLICITADO
         
         with st.form("login_form"):
             email = st.text_input("Email:", placeholder="seu@gmail.com")
@@ -1431,8 +1423,7 @@ def show_main_app(user):
             st.markdown(f'<div class="error-msg">Erro ao processar planilha: {str(e)}</div>', unsafe_allow_html=True)
     
     else:
-        # Instruções iniciais
-        total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
+        # Instruções iniciais - LISTA DE FUNCIONALIDADES REMOVIDA CONFORME SOLICITADO
         st.markdown(f"""
         <div class="info-msg">
             <h4>Como usar o sistema:</h4>
@@ -1446,17 +1437,6 @@ def show_main_app(user):
                 <li><strong>Adicione</strong> EPIs e medidas preventivas</li>
                 <li><strong>Gere</strong> as Ordens de Serviço conforme NR-01</li>
             </ol>
-            
-            <p><strong>Funcionalidades implementadas:</strong></p>
-            <ul>
-                <li>Filtro múltiplo por setores - Selecione vários setores simultaneamente</li>
-                <li>Filtro múltiplo por funções - Selecione várias funções simultaneamente</li>
-                <li>Template personalizado - Upload do seu modelo Word</li>
-                <li>Preenchimento automático - "Ausência de Fator de Risco" quando necessário</li>
-                <li>Validação de email - Apenas emails de provedores válidos</li>
-                <li>Tema minimalista - Interface clean e profissional</li>
-                <li>{total_riscos} opções de riscos organizados em 5 categorias</li>
-            </ul>
         </div>
         """, unsafe_allow_html=True)
 
