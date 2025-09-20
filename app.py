@@ -326,6 +326,15 @@ st.markdown("""
         margin: 1rem 0;
     }
     
+    .warning-msg {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 1rem;
+        color: #ffc107;
+        margin: 1rem 0;
+    }
+    
     .info-msg {
         background: rgba(33, 150, 243, 0.1);
         border: 1px solid #2196F3;
@@ -401,10 +410,28 @@ st.markdown("""
         border: 1px solid #0f3460 !important;
         color: white !important;
     }
+    
+    /* MULTISELECT CUSTOMIZADO */
+    .stMultiSelect [data-baseweb="select"] {
+        background: #16213e;
+        border: 2px solid #0f3460;
+        border-radius: 8px;
+    }
+    
+    .stMultiSelect [data-baseweb="select"]:hover {
+        border-color: #4CAF50;
+    }
+    
+    /* SELECTBOX CUSTOMIZADO */
+    .stSelectbox [data-baseweb="select"] {
+        background: #16213e;
+        border: 2px solid #0f3460;
+        border-radius: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SISTEMA DE AUTENTICAÇÃO SIMPLIFICADO ---
+# --- SISTEMA DE AUTENTICAÇÃO APRIMORADO ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -417,7 +444,8 @@ def initialize_users():
                 'nome': 'Administrador',
                 'empresa': 'Empresa Teste',
                 'email': 'admin@teste.com',
-                'credits': 1000
+                'credits': 1000,
+                'is_admin': False
             },
             'robsonmbf@hotmail.com': {
                 'id': 2,
@@ -425,7 +453,8 @@ def initialize_users():
                 'nome': 'Robson',
                 'empresa': 'Minha Empresa',
                 'email': 'robsonmbf@hotmail.com',
-                'credits': 1000
+                'credits': 999999,  # Créditos ilimitados
+                'is_admin': True    # Admin não consome créditos
             }
         }
 
@@ -452,7 +481,8 @@ def register_user(email, password, nome, empresa):
         'nome': nome,
         'empresa': empresa,
         'email': email,
-        'credits': 100
+        'credits': 100,
+        'is_admin': False
     }
     return user_id
 
@@ -460,6 +490,8 @@ def get_user_credits(user_id):
     initialize_users()
     for user in st.session_state.users_db.values():
         if user['id'] == user_id:
+            if user.get('is_admin', False):
+                return "∞"  # Mostrar infinito para admin
             return user['credits']
     return 0
 
@@ -467,11 +499,22 @@ def debit_credits(user_id, amount):
     initialize_users()
     for user in st.session_state.users_db.values():
         if user['id'] == user_id:
+            if user.get('is_admin', False):
+                return True  # Admin não consome créditos
             user['credits'] = max(0, user['credits'] - amount)
             return True
     return False
 
-# --- FUNÇÕES AUXILIARES ---
+def check_sufficient_credits(user_id, amount):
+    initialize_users()
+    for user in st.session_state.users_db.values():
+        if user['id'] == user_id:
+            if user.get('is_admin', False):
+                return True  # Admin sempre tem créditos suficientes
+            return user['credits'] >= amount
+    return False
+
+# --- FUNÇÕES AUXILIARES APRIMORADAS ---
 def create_sample_data():
     sample_data = {
         'Nome': ['JOÃO SILVA SANTOS', 'MARIA OLIVEIRA COSTA', 'PEDRO ALVES FERREIRA'],
@@ -499,6 +542,33 @@ def validate_excel_structure(df):
         return False, "A planilha está vazia"
     
     return True, "Estrutura válida"
+
+def check_duplicate_functions_across_sectors(df):
+    """Verifica se há funções duplicadas em setores diferentes"""
+    function_sector_map = {}
+    duplicates = []
+    
+    for _, row in df.iterrows():
+        funcao = row['Função']
+        setor = row['Setor']
+        
+        if funcao in function_sector_map:
+            if setor not in function_sector_map[funcao]:
+                function_sector_map[funcao].append(setor)
+                if len(function_sector_map[funcao]) == 2:  # Primeira duplicata encontrada
+                    duplicates.append({
+                        'funcao': funcao,
+                        'setores': function_sector_map[funcao].copy()
+                    })
+                elif len(function_sector_map[funcao]) > 2:  # Mais setores para a mesma função
+                    # Atualizar a lista de setores para essa função
+                    for dup in duplicates:
+                        if dup['funcao'] == funcao:
+                            dup['setores'] = function_sector_map[funcao].copy()
+        else:
+            function_sector_map[funcao] = [setor]
+    
+    return duplicates
 
 def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventivas, observacoes, template_doc=None):
     try:
@@ -601,7 +671,7 @@ def gerar_documento_os(dados_funcionario, agentes_risco, epis, medidas_preventiv
         st.error(f"Erro ao gerar documento: {str(e)}")
         return None
 
-# --- FUNÇÃO DE LOGIN ---
+# --- FUNÇÃO DE LOGIN ATUALIZADA ---
 def show_login_page():
     st.markdown('<div class="title-header">🔐 Gerador de Ordens de Serviço (OS)</div>', unsafe_allow_html=True)
     
@@ -627,14 +697,7 @@ def show_login_page():
         st.markdown('<div class="login-title">🔑 Faça seu Login</div>', unsafe_allow_html=True)
         
         with st.form("login_form"):
-            st.markdown("""
-            <div class="info-msg">
-                <strong>💡 Contas de Teste:</strong><br>
-                • <strong>admin@teste.com</strong> / admin123<br>
-                • <strong>robsonmbf@hotmail.com</strong> / 123456
-            </div>
-            """, unsafe_allow_html=True)
-            
+            # NÃO mostrar contas de teste publicamente
             email = st.text_input("📧 Email:", placeholder="seu@email.com")
             password = st.text_input("🔒 Senha:", type="password", placeholder="Sua senha")
             
@@ -714,6 +777,17 @@ def show_main_app(user):
     
     st.markdown(f"🏢 **Empresa:** {user['empresa']}")
     
+    # Mostrar status de admin se for o caso
+    if user.get('is_admin', False):
+        st.markdown("""
+        <div class="warning-msg">
+            <strong>👑 CONTA ADMINISTRADOR</strong><br>
+            • Créditos ilimitados<br>
+            • Não há cobrança de créditos<br>
+            • Acesso completo ao sistema
+        </div>
+        """, unsafe_allow_html=True)
+    
     total_riscos = sum(len(riscos) for riscos in AGENTES_POR_CATEGORIA.values())
     st.markdown(f"""
     <div class="info-msg">
@@ -742,6 +816,8 @@ def show_main_app(user):
         st.markdown(f"**Email:** {user['email']}")
         st.markdown(f"**Empresa:** {user['empresa']}")
         st.markdown(f"**Créditos:** {credits}")
+        if user.get('is_admin', False):
+            st.markdown("**Status:** 👑 Administrador")
         
         st.markdown("---")
         st.markdown("### 📋 Estrutura da Planilha")
@@ -812,6 +888,15 @@ def show_main_app(user):
             
             st.markdown(f'<div class="success-msg">✅ Planilha carregada: {len(df)} funcionários encontrados</div>', unsafe_allow_html=True)
             
+            # Verificar funções duplicadas em setores diferentes
+            duplicates = check_duplicate_functions_across_sectors(df)
+            if duplicates:
+                st.markdown('<div class="warning-msg"><strong>⚠️ ATENÇÃO - Funções Duplicadas Encontradas:</strong><br><br>', unsafe_allow_html=True)
+                for dup in duplicates:
+                    setores_text = ", ".join(dup['setores'])
+                    st.markdown(f"• **{dup['funcao']}** encontrada nos setores: **{setores_text}**<br>", unsafe_allow_html=True)
+                st.markdown('<br>Recomenda-se revisar se os riscos são os mesmos para esta função em setores diferentes.</div>', unsafe_allow_html=True)
+            
             # Estatísticas da planilha
             col1, col2, col3, col4 = st.columns(4)
             
@@ -848,33 +933,43 @@ def show_main_app(user):
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Seleção de funcionários
+            # Seleção de funcionários MELHORADA
             st.markdown("## 👥 Seleção de Funcionários")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                setores_disponiveis = ['Todos os setores'] + sorted(df['Setor'].dropna().unique().tolist())
-                setor_selecionado = st.selectbox("🏢 Filtrar por Setor:", setores_disponiveis)
+                # SELEÇÃO MÚLTIPLA DE SETORES
+                todos_setores = sorted(df['Setor'].dropna().unique().tolist())
+                setores_selecionados = st.multiselect(
+                    "🏢 Selecione os Setores:",
+                    todos_setores,
+                    help="Selecione um ou mais setores. Se nenhum for selecionado, todos serão incluídos."
+                )
                 
-                if setor_selecionado == 'Todos os setores':
+                # Se nenhum setor for selecionado, incluir todos
+                if not setores_selecionados:
                     df_filtrado = df
+                    st.info("📋 Todos os setores estão incluídos (nenhum selecionado)")
                 else:
-                    df_filtrado = df[df['Setor'] == setor_selecionado]
+                    df_filtrado = df[df['Setor'].isin(setores_selecionados)]
+                    setores_text = ", ".join(setores_selecionados)
+                    st.success(f"📋 Filtrando por: {setores_text}")
             
             with col2:
                 modo_selecao = st.radio(
                     "📋 Modo de Seleção:",
-                    ["Funcionário Individual", "Múltiplos Funcionários", "Todos do Setor Filtrado"]
+                    ["Funcionário Individual", "Múltiplos Funcionários", "Todos dos Setores Selecionados"]
                 )
             
-            # Lógica de seleção
+            # Lógica de seleção APRIMORADA
             funcionarios_selecionados = []
             
             if modo_selecao == "Funcionário Individual":
                 funcionario_individual = st.selectbox(
                     "👤 Selecione o funcionário:",
-                    [''] + df_filtrado['Nome'].tolist()
+                    [''] + df_filtrado['Nome'].tolist(),
+                    help="Escolha um funcionário específico da lista filtrada"
                 )
                 if funcionario_individual:
                     funcionarios_selecionados = [funcionario_individual]
@@ -882,13 +977,17 @@ def show_main_app(user):
             elif modo_selecao == "Múltiplos Funcionários":
                 funcionarios_selecionados = st.multiselect(
                     "👥 Selecione múltiplos funcionários:",
-                    df_filtrado['Nome'].tolist()
+                    df_filtrado['Nome'].tolist(),
+                    help="Escolha vários funcionários mantendo Ctrl pressionado"
                 )
             
-            else:
+            else:  # Todos dos setores selecionados
                 funcionarios_selecionados = df_filtrado['Nome'].tolist()
                 if funcionarios_selecionados:
-                    st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários do setor.")
+                    if setores_selecionados:
+                        st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários dos setores selecionados.")
+                    else:
+                        st.info(f"📝 Serão geradas OS para todos os {len(funcionarios_selecionados)} funcionários de todos os setores.")
             
             # Configuração de riscos se há funcionários selecionados
             if funcionarios_selecionados:
@@ -1012,10 +1111,15 @@ def show_main_app(user):
                 st.markdown("## 🚀 Gerar Ordens de Serviço")
                 
                 creditos_necessarios = len(funcionarios_selecionados)
-                creditos_usuario = get_user_credits(user['id'])
+                tem_creditos_suficientes = check_sufficient_credits(user['id'], creditos_necessarios)
                 
-                if creditos_usuario >= creditos_necessarios:
-                    if st.button(f"📄 GERAR {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)", type="primary"):
+                if tem_creditos_suficientes:
+                    if user.get('is_admin', False):
+                        button_text = f"📄 GERAR {len(funcionarios_selecionados)} OS (GRATUITO - ADMIN)"
+                    else:
+                        button_text = f"📄 GERAR {len(funcionarios_selecionados)} OS ({creditos_necessarios} créditos)"
+                    
+                    if st.button(button_text, type="primary"):
                         
                         progress_bar = st.progress(0)
                         status_text = st.empty()
@@ -1054,8 +1158,9 @@ def show_main_app(user):
                             progress_bar.progress((idx + 1) / len(funcionarios_selecionados))
                             time.sleep(0.3)
                         
-                        # Debitar créditos
-                        debit_credits(user['id'], creditos_necessarios)
+                        # Debitar créditos (só se não for admin)
+                        if not user.get('is_admin', False):
+                            debit_credits(user['id'], creditos_necessarios)
                         
                         status_text.text("✅ Geração concluída!")
                         
@@ -1091,12 +1196,20 @@ def show_main_app(user):
                                     mime="application/zip",
                                     use_container_width=True
                                 )
+                                
+                            # Mostrar créditos restantes (apenas se não for admin)
+                            if not user.get('is_admin', False):
+                                creditos_restantes = get_user_credits(user['id'])
+                                st.markdown(f'<div class="info-msg">💳 {creditos_necessarios} créditos foram debitados. Créditos restantes: {creditos_restantes}</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<div class="info-msg">👑 Geração realizada sem custo (conta administrador)</div>', unsafe_allow_html=True)
                         else:
                             st.markdown('<div class="error-msg">❌ Erro: Nenhum documento foi gerado. Verifique as configurações.</div>', unsafe_allow_html=True)
                         
                         time.sleep(2)
                         st.rerun()
                 else:
+                    creditos_usuario = get_user_credits(user['id'])
                     st.markdown(f'<div class="error-msg">⚠️ Créditos insuficientes. Você precisa de {creditos_necessarios} créditos, mas possui apenas {creditos_usuario}.</div>', unsafe_allow_html=True)
         
         except Exception as e:
@@ -1110,13 +1223,19 @@ def show_main_app(user):
             <h4>🎯 Como usar o sistema:</h4>
             <ol>
                 <li><strong>📤 Faça upload</strong> da planilha Excel com dados dos funcionários</li>
-                <li><strong>👥 Selecione</strong> os funcionários (individual, múltiplos ou todos)</li>
+                <li><strong>🏢 Selecione</strong> um ou mais setores (ou deixe vazio para todos)</li>
+                <li><strong>👥 Escolha</strong> o modo de seleção de funcionários</li>
                 <li><strong>⚠️ Configure</strong> os riscos ocupacionais específicos</li>
                 <li><strong>🥽 Adicione</strong> EPIs e medidas preventivas</li>
                 <li><strong>🚀 Gere</strong> as Ordens de Serviço conforme NR-01</li>
             </ol>
             
-            <p><strong>🆕 Sistema expandido:</strong> Agora com <strong>{total_riscos} opções de riscos</strong> organizados em 5 categorias!</p>
+            <p><strong>🆕 Novidades desta versão:</strong></p>
+            <ul>
+                <li>✅ <strong>Seleção múltipla de setores</strong> - Escolha vários setores simultaneamente</li>
+                <li>✅ <strong>Detecção de funções duplicadas</strong> - Sistema alerta sobre mesma função em setores diferentes</li>
+                <li>✅ <strong>{total_riscos} opções de riscos</strong> organizados em 5 categorias</li>
+            </ul>
         </div>
         """, unsafe_allow_html=True)
 
