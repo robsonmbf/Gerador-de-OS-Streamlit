@@ -329,225 +329,237 @@ def substituir_placeholders(doc, contexto):
             new_run.font.bold = False
             if font_info and font_info['italic']:
                 new_run.font.italic = font_info['italic']
-def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
+
+def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado, ausencia_fator_risco=False):
+    """
+    Função modificada para incluir a opção 'Ausência de Fator de Risco'
+    """
     doc = Document(modelo_doc_carregado)
-    riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
-    riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+    
+    # Se 'Ausência de Fator de Risco' estiver selecionada, preencher todos os riscos com essa frase
+    if ausencia_fator_risco:
+        riscos_por_categoria = {cat: ["Ausência de Fator de Risco"] for cat in CATEGORIAS_RISCO.keys()}
+        danos_por_categoria = {cat: ["Não aplicável"] for cat in CATEGORIAS_RISCO.keys()}
+    else:
+        # Lógica original
+        riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
+        riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+        danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
 
-    # Processar riscos selecionados
-    for _, risco_row in riscos_info.iterrows():
-        categoria = str(risco_row.get("categoria", "")).lower()
-        if categoria in riscos_por_categoria:
-            riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
-            danos = risco_row.get("possiveis_danos")
-            if pd.notna(danos): 
-                danos_por_categoria[categoria].append(str(danos))
+        # Processar riscos selecionados
+        for _, risco_row in riscos_info.iterrows():
+            categoria = str(risco_row.get("categoria", "")).lower()
+            if categoria in riscos_por_categoria:
+                riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
+                danos = risco_row.get("possiveis_danos", "")
+                if danos and str(danos).strip():
+                    danos_por_categoria[categoria].append(str(danos))
 
-    # Processar riscos manuais
-    if riscos_manuais:
-        map_categorias_rev = {v: k for k, v in CATEGORIAS_RISCO.items()}
+        # Processar riscos manuais
         for risco_manual in riscos_manuais:
-            categoria_display = risco_manual.get('category')
-            categoria_alvo = map_categorias_rev.get(categoria_display)
-            if categoria_alvo:
-                riscos_por_categoria[categoria_alvo].append(risco_manual.get('risk_name', ''))
-                if risco_manual.get('possible_damages'):
-                    danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
+            categoria_display = risco_manual.get('category', '')
+            categoria_key = None
+            for key, value in CATEGORIAS_RISCO.items():
+                if value == categoria_display:
+                    categoria_key = key
+                    break
+            if categoria_key:
+                riscos_por_categoria[categoria_key].append(risco_manual.get('risk_name', ''))
+                danos_manual = risco_manual.get('possible_damages', '')
+                if danos_manual and str(danos_manual).strip():
+                    danos_por_categoria[categoria_key].append(str(danos_manual))
 
-    # Limpar duplicatas
-    for cat in danos_por_categoria:
-        danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+    # Preparar medições
+    medicoes_texto = ""
+    if medicoes_manuais:
+        medicoes_lista = []
+        for med in medicoes_manuais:
+            agent = med.get('agent', '')
+            value = med.get('value', '')
+            unit = med.get('unit', '')
+            epi = med.get('associated_epi', '')
+            medicao_str = f"{agent}: {value} {unit}"
+            if epi:
+                medicao_str += f" (EPI: {epi})"
+            medicoes_lista.append(medicao_str)
+        medicoes_texto = "\n".join(medicoes_lista)
+    else:
+        medicoes_texto = "Não foram realizadas medições específicas para esta função."
 
-    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
-    medicoes_formatadas = []
+    # Preparar EPIs
+    epis_texto = ""
+    if epis_manuais:
+        epis_lista = [epi.get('epi_name', '') for epi in epis_manuais if epi.get('epi_name')]
+        epis_texto = ", ".join(epis_lista)
+    else:
+        epis_texto = "Conforme análise de risco específica da função."
 
-    for med in medicoes_manuais:
-        agente = str(med.get('agent', '')).strip()
-        valor = str(med.get('value', '')).strip()  
-        unidade = str(med.get('unit', '')).strip()
-        epi = str(med.get('epi', '')).strip()
-
-        if agente and valor and agente not in ['N/A', 'nan', 'None'] and valor not in ['N/A', 'nan', 'None']:
-            # Formato simples: "Agente: Valor Unidade"
-            linha = f"{agente}: {valor}"
-
-            if unidade and unidade not in ['N/A', 'nan', 'None', '']:
-                linha += f" {unidade}"
-
-            if epi and epi not in ['N/A', 'nan', 'None', '']:
-                linha += f" | EPI: {epi}"
-
-            medicoes_formatadas.append(linha)
-
-    # Texto final
-    medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
-
-    # Processar data de admissão
-    data_admissao = "Não informado"
-    if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
-        try: 
-            data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
-        except Exception: 
-            data_admissao = str(funcionario['data_de_admissao'])
-    elif 'Data de Admissão' in funcionario and pd.notna(funcionario['Data de Admissão']):
-        try: 
-            data_admissao = pd.to_datetime(funcionario['Data de Admissão']).strftime('%d/%m/%Y')
-        except Exception: 
-            data_admissao = str(funcionario['Data de Admissão'])
-
-    # Processar descrição de atividades
-    descricao_atividades = "Não informado"
-    if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
-        descricao_atividades = str(funcionario['descricao_de_atividades']).strip()
-    elif 'Descrição de Atividades' in funcionario and pd.notna(funcionario['Descrição de Atividades']):
-        descricao_atividades = str(funcionario['Descrição de Atividades']).strip()
-
-    if descricao_atividades == "Não informado" or descricao_atividades == "" or descricao_atividades == "nan":
-        funcao = str(funcionario.get('funcao', funcionario.get('Função', 'N/A')))
-        setor = str(funcionario.get('setor', funcionario.get('Setor', 'N/A')))
-        if funcao != 'N/A' and setor != 'N/A':
-            descricao_atividades = f"Atividades relacionadas à função de {funcao} no setor {setor}, incluindo todas as tarefas operacionais, administrativas e de apoio inerentes ao cargo."
-        else:
-            descricao_atividades = "Atividades operacionais, administrativas e de apoio conforme definido pela chefia imediata."
-
-    def tratar_lista_vazia(lista, separador=", "):
-        if not lista or all(not item.strip() for item in lista): 
-            return "Não identificado"
-        return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
-
-    # Contexto
+    # Preparar contexto para substituição
     contexto = {
-        "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
-        "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
-        "[NOME FUNCIONÁRIO]": str(funcionario.get("nome_do_funcionario", funcionario.get("Nome", "N/A"))), 
-        "[DATA DE ADMISSÃO]": data_admissao,
-        "[SETOR]": str(funcionario.get("setor", funcionario.get("Setor", "N/A"))), 
-        "[FUNÇÃO]": str(funcionario.get("funcao", funcionario.get("Função", "N/A"))),
-        "[DESCRIÇÃO DE ATIVIDADES]": descricao_atividades,
-        "[RISCOS FÍSICOS]": tratar_lista_vazia(riscos_por_categoria["fisico"]),
-        "[RISCOS DE ACIDENTE]": tratar_lista_vazia(riscos_por_categoria["acidente"]),
-        "[RISCOS QUÍMICOS]": tratar_lista_vazia(riscos_por_categoria["quimico"]),
-        "[RISCOS BIOLÓGICOS]": tratar_lista_vazia(riscos_por_categoria["biologico"]),
-        "[RISCOS ERGONÔMICOS]": tratar_lista_vazia(riscos_por_categoria["ergonomico"]),
-        "[POSSÍVEIS DANOS RISCOS FÍSICOS]": tratar_lista_vazia(danos_por_categoria["fisico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ACIDENTE]": tratar_lista_vazia(danos_por_categoria["acidente"], "; "),
-        "[POSSÍVEIS DANOS RISCOS QUÍMICOS]": tratar_lista_vazia(danos_por_categoria["quimico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
-        "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
+        "[NOME_FUNCIONARIO]": funcionario.get("nome_do_funcionario", ""),
+        "[FUNCAO]": funcionario.get("funcao", ""),
+        "[SETOR]": funcionario.get("setor", ""),
+        "[DATA_ADMISSAO]": funcionario.get("data_de_admissao", ""),
+        "[DESCRICAO_ATIVIDADES]": funcionario.get("descricao_de_atividades", ""),
+        "[EMPRESA]": funcionario.get("empresa", ""),
+        "[UNIDADE]": funcionario.get("unidade", ""),
         "[MEDIÇÕES]": medicoes_texto,
+        "[EPIS]": epis_texto,
     }
 
+    # Adicionar riscos por categoria
+    for categoria_key, categoria_nome in CATEGORIAS_RISCO.items():
+        riscos_lista = riscos_por_categoria.get(categoria_key, [])
+        danos_lista = danos_por_categoria.get(categoria_key, [])
+        
+        if riscos_lista:
+            contexto[f"[RISCOS_{categoria_key.upper()}]"] = "; ".join(riscos_lista)
+        else:
+            contexto[f"[RISCOS_{categoria_key.upper()}]"] = "Não identificados para esta função"
+        
+        if danos_lista:
+            contexto[f"[DANOS_{categoria_key.upper()}]"] = "; ".join(danos_lista)
+        else:
+            contexto[f"[DANOS_{categoria_key.upper()}]"] = "Não aplicável"
+
+    # Substituir placeholders
     substituir_placeholders(doc, contexto)
     return doc
 
-# --- APLICAÇÃO PRINCIPAL ---
 def main():
     check_authentication()
-    init_user_session_state()
-    
-    if not st.session_state.get('authenticated'):
+    if not st.session_state.authenticated:
         show_login_page()
         return
     
-    user_id = st.session_state.user_data['user_id']
     show_user_info()
+    init_user_session_state()
+    user_id = st.session_state.user_data.get('user_id')
     
-    st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
-
+    st.title("📋 Gerador de Ordens de Serviço (OS)")
+    st.markdown("---")
+    
+    # Upload do modelo de OS
     with st.container(border=True):
-        st.markdown("##### 📂 1. Carregue os Documentos")
+        st.markdown('##### 📄 1. Carregue o Modelo de OS')
+        arquivo_modelo_os = st.file_uploader("Selecione o ficheiro modelo da OS (.docx)", type=["docx"])
+        if not arquivo_modelo_os:
+            st.warning("⚠️ Por favor, carregue o modelo de OS para continuar.")
+            return
+        st.success("✅ Modelo de OS carregado com sucesso!")
+    
+    # Upload da planilha de funcionários
+    with st.container(border=True):
+        st.markdown('##### 📊 2. Carregue a Planilha de Funcionários')
+        arquivo_funcionarios = st.file_uploader("Selecione a planilha de funcionários (.xlsx)", type=["xlsx"])
+        if not arquivo_funcionarios:
+            st.warning("⚠️ Por favor, carregue a planilha de funcionários para continuar.")
+            return
+        
+        df_funcionarios_original = carregar_planilha(arquivo_funcionarios)
+        if df_funcionarios_original is None:
+            return
+        
+        df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_original)
+        colunas_obrigatorias = ['nome_do_funcionario', 'funcao', 'setor', 'data_de_admissao', 'descricao_de_atividades', 'empresa', 'unidade']
+        colunas_faltando = [col for col in colunas_obrigatorias if col not in df_funcionarios.columns]
+        
+        if colunas_faltando:
+            st.error(f"❌ Colunas obrigatórias em falta: {', '.join(colunas_faltando)}")
+            st.info("💡 Certifique-se de que a planilha contém as colunas: Nome do Funcionário, Função, Setor, Data de Admissão, Descrição de Atividades, Empresa, Unidade")
+            return
+        
+        st.success(f"✅ Planilha carregada com sucesso! {len(df_funcionarios)} funcionários encontrados.")
+        
+        # Filtros
         col1, col2 = st.columns(2)
         with col1:
-            arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx")
+            setores_unicos = sorted(df_funcionarios['setor'].dropna().unique())
+            setores_selecionados = st.multiselect("Filtrar por Setores:", setores_unicos, default=setores_unicos)
         with col2:
-            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
+            funcoes_unicas = sorted(df_funcionarios['funcao'].dropna().unique())
+            funcoes_selecionadas = st.multiselect("Filtrar por Funções:", funcoes_unicas, default=funcoes_unicas)
+        
+        df_final_filtrado = df_funcionarios[
+            (df_funcionarios['setor'].isin(setores_selecionados)) & 
+            (df_funcionarios['funcao'].isin(funcoes_selecionadas))
+        ]
+        
+        if df_final_filtrado.empty:
+            st.warning("⚠️ Nenhum funcionário corresponde aos filtros selecionados.")
+            return
+        
+        st.info(f"📊 {len(df_final_filtrado)} funcionário(s) selecionado(s) após aplicar os filtros.")
+        with st.expander("👀 Visualizar funcionários selecionados"):
+            st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']], use_container_width=True)
 
-    if not arquivo_funcionarios or not arquivo_modelo_os:
-        st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
-        return
-    
-    df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
-    if df_funcionarios_raw is None:
-        st.stop()
-
-    df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
     df_pgr = obter_dados_pgr()
-
-    with st.container(border=True):
-        st.markdown('##### 👥 2. Selecione os Funcionários')
-        setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
-        setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
-        df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
-        funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
-        funcoes_formatadas = []
-        if setor_sel:
-            for funcao in funcoes_disponiveis:
-                concluido = all((s, funcao) in st.session_state.cargos_concluidos for s in setor_sel)
-                if concluido:
-                    funcoes_formatadas.append(f"{funcao} ✅ Concluído")
-                else:
-                    funcoes_formatadas.append(funcao)
-        else:
-            funcoes_formatadas = funcoes_disponiveis
-        funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
-        funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
-        df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
-        st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
-        st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
-
+    
+    # Configuração de riscos com nova opção
     with st.container(border=True):
         st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
         st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
-        riscos_selecionados = []
-        nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
-        tabs = st.tabs(nomes_abas)
-        for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
-            with tabs[i]:
-                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
-                selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
-                riscos_selecionados.extend(selecionados)
-        with tabs[-1]:
-            with st.form("form_risco_manual", clear_on_submit=True):
-                st.markdown("###### Adicionar um Risco que não está na lista")
-                risco_manual_nome = st.text_input("Descrição do Risco")
-                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
-                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
-                if st.form_submit_button("Adicionar Risco Manual"):
-                    if risco_manual_nome and categoria_manual:
-                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-            if st.session_state.riscos_manuais_adicionados:
-                st.write("**Riscos manuais salvos:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    col1, col2 = st.columns([4, 1])
-                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
-                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
-                        user_data_manager.remove_manual_risk(user_id, r['id'])
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
         
-        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
-        if total_riscos > 0:
-            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
-                    if not categoria_key_series.empty:
-                        categoria_key = categoria_key_series.iloc[0]
-                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
-                        if categoria_display:
-                            riscos_para_exibir[categoria_display].append(risco_nome)
-                for risco_manual in st.session_state.riscos_manuais_adicionados:
-                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
-                for categoria, lista_riscos in riscos_para_exibir.items():
-                    if lista_riscos:
-                        st.markdown(f"**{categoria}**")
-                        for risco in sorted(list(set(lista_riscos))):
-                            st.markdown(f"- {risco}")
+        # NOVA FUNCIONALIDADE: Checkbox para "Ausência de Fator de Risco"
+        ausencia_fator_risco = st.checkbox(
+            "🚫 **Ausência de Fator de Risco**", 
+            help="Marque esta opção se não há fatores de risco identificados para os funcionários selecionados. Isso preencherá todos os campos de risco com 'Ausência de Fator de Risco'."
+        )
+        
+        if ausencia_fator_risco:
+            st.success("✅ Opção 'Ausência de Fator de Risco' selecionada. Todos os campos de risco serão preenchidos com esta informação.")
+            # Desabilitar a seleção de riscos quando "Ausência de Fator de Risco" estiver marcada
+            st.info("ℹ️ A seleção de riscos específicos foi desabilitada pois 'Ausência de Fator de Risco' está marcada.")
+            riscos_selecionados = []
+        else:
+            # Lógica original para seleção de riscos
+            riscos_selecionados = []
+            nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
+            tabs = st.tabs(nomes_abas)
+            for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
+                with tabs[i]:
+                    riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
+                    selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
+                    riscos_selecionados.extend(selecionados)
+            with tabs[-1]:
+                with st.form("form_risco_manual", clear_on_submit=True):
+                    st.markdown("###### Adicionar um Risco que não está na lista")
+                    risco_manual_nome = st.text_input("Descrição do Risco")
+                    categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
+                    danos_manuais = st.text_area("Possíveis Danos (Opcional)")
+                    if st.form_submit_button("Adicionar Risco Manual"):
+                        if risco_manual_nome and categoria_manual:
+                            user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+                if st.session_state.riscos_manuais_adicionados:
+                    st.write("**Riscos manuais salvos:**")
+                    for r in st.session_state.riscos_manuais_adicionados:
+                        col1, col2 = st.columns([4, 1])
+                        col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
+                        if col2.button("Remover", key=f"rem_risco_{r['id']}"):
+                            user_data_manager.remove_manual_risk(user_id, r['id'])
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+            
+            total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
+            if total_riscos > 0:
+                with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
+                    riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
+                    for risco_nome in riscos_selecionados:
+                        categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                        if not categoria_key_series.empty:
+                            categoria_key = categoria_key_series.iloc[0]
+                            categoria_display = CATEGORIAS_RISCO.get(categoria_key)
+                            if categoria_display:
+                                riscos_para_exibir[categoria_display].append(risco_nome)
+                    for risco_manual in st.session_state.riscos_manuais_adicionados:
+                        riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
+                    for categoria, lista_riscos in riscos_para_exibir.items():
+                        if lista_riscos:
+                            st.markdown(f"**{categoria}**")
+                            for risco in sorted(list(set(lista_riscos))):
+                                st.markdown(f"- {risco}")
         
         st.divider()
 
@@ -611,7 +623,8 @@ def main():
                     st.session_state.epis_adicionados,
                     st.session_state.medicoes_adicionadas, 
                     st.session_state.riscos_manuais_adicionados, 
-                    arquivo_modelo_os
+                    arquivo_modelo_os,
+                    ausencia_fator_risco  # Novo parâmetro
                 )
                 doc_io = BytesIO()
                 doc.save(doc_io)
@@ -637,3 +650,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
