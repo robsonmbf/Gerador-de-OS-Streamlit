@@ -1,11 +1,15 @@
-# 🔐 Sistema Gerador de OS - Visualização Melhorada (CORRIGIDO)
+# 🔐 Sistema Gerador de OS - VERSÃO COMPLETA COM RELATÓRIOS
+# Preenchimento automático de DOCX + Relatório detalhado das OS geradas
 # Desenvolvido por especialista em UX/UI - Setembro 2025
 
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.shared import OxmlElement, qn
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
 import zipfile
 from io import BytesIO
 import time
@@ -13,6 +17,8 @@ import re
 import sys
 import os
 import json
+from datetime import datetime, timedelta
+import uuid
 
 # Adicionar o diretório atual ao path para importar módulos locais
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -25,7 +31,6 @@ try:
     USE_LOCAL_DB = True
 except ImportError:
     USE_LOCAL_DB = False
-    st.warning("⚠️ Módulos de banco de dados não encontrados. Sistema funcionará em modo local.")
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -35,48 +40,34 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CONSTANTES GLOBAIS EXPANDIDAS ---
+# === CONSTANTES GLOBAIS ATUALIZADAS ===
 UNIDADES_DE_MEDIDA = [
     "dB(A)", "m/s²", "m/s¹⁷⁵", "ppm", "mg/m³", "%", "°C", "lx", 
     "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"
 ]
 
-# === MAPEAMENTO AUTOMÁTICO DE UNIDADES POR AGENTE ===
+# === MAPEAMENTO AUTOMÁTICO DE UNIDADES ===
 UNIDADES_AUTOMATICAS = {
-    # Riscos Físicos - Ruído
+    # Vibração - NOVOS VDVR e AREN
+    "Vibração de Corpo Inteiro (AREN)": "m/s²",
+    "Vibração de Corpo Inteiro (VDVR)": "m/s¹⁷⁵",
+    "Vibrações Localizadas (mão/braço)": "m/s²",
+    "Vibração de Mãos e Braços": "m/s²",
+    "Vibração de Corpo Inteiro": "m/s²",
+    
+    # Ruído
     "Exposição ao Ruído": "dB(A)",
     "Ruído (Contínuo ou Intermitente)": "dB(A)",
     "Ruído (Impacto)": "dB(A)",
     
-    # Riscos Físicos - Vibração
-    "Vibração de Corpo Inteiro (AREN)": "m/s²",
-    "Vibração de Corpo Inteiro (VDVR)": "m/s¹⁷⁵",
-    "Vibrações Localizadas (mão/braço)": "m/s²",
-    "Vibrações Localizadas em partes do corpo": "m/s²",
-    "Vibração de Mãos e Braços": "m/s²",
-    "Vibração de Corpo Inteiro": "m/s²",
-    
-    # Riscos Físicos - Temperatura
+    # Temperatura
     "Ambiente Artificialmente Frio": "°C",
     "Exposição à Temperatura Ambiente Baixa": "°C",
     "Exposição à Temperatura Ambiente Elevada": "°C",
     "Calor": "°C",
     "Frio": "°C",
     
-    # Riscos Físicos - Radiações
-    "Exposição à Radiações Ionizantes": "µT",
-    "Exposição à Radiações Não-ionizantes": "µT",
-    "Radiações Ionizantes": "µT",
-    "Radiações Não-Ionizantes": "µT",
-    
-    # Riscos Físicos - Pressão
-    "Pressão Atmosférica Anormal (condições hiperbáricas)": "kV/m",
-    "Pressões Anormais": "kV/m",
-    
-    # Riscos Físicos - Iluminação
-    "Iluminação inadequada (deficiente ou excessiva)": "lx",
-    
-    # Riscos Químicos - Concentração
+    # Químicos
     "Exposição a Produto Químico": "ppm",
     "Produtos Químicos em Geral": "ppm",
     "Poeiras": "mg/m³",
@@ -85,150 +76,44 @@ UNIDADES_AUTOMATICAS = {
     "Neblinas": "mg/m³",
     "Gases": "ppm",
     "Vapores": "ppm",
-    "Exposição a gases e vapores": "ppm",
     
-    # Riscos Biológicos - Geralmente não aplicável
-    "Água e/ou alimentos contaminados": "Não aplicável",
-    "Contaminação pelo Corona Vírus": "Não aplicável",
-    "Contato com Fluido Orgânico (sangue, hemoderivados, secreções, excreções)": "Não aplicável",
-    "Contato com Pessoas Doentes e/ou Material Infectocontagiante": "Não aplicável",
-    "Exposição à Agentes Microbiológicos (fungos, bactérias, vírus, protozoários, parasitas)": "Não aplicável",
-    
-    # Riscos Ergonômicos - Geralmente percentual ou não aplicável
-    "Posturas incômodas/pouco confortáveis por longos períodos": "%",
-    "Postura sentada por longos períodos": "%",
-    "Postura em pé por longos períodos": "%",
-    "Frequente execução de movimentos repetitivos": "%",
-    "Esforço físico intenso": "%",
-    "Levantamento e transporte manual de cargas ou volumes": "%",
-    
-    # Riscos de Acidentes - Geralmente não aplicável
-    "Contato com corrente elétrica": "Não aplicável",
-    "Contato com chama aberta": "Não aplicável",
-    "Queda com diferença de nível": "Não aplicável",
-    "Queda de mesmo nível": "Não aplicável",
-    "Objeto cortante ou perfurante": "Não aplicável",
+    # Outros
+    "Exposição à Radiações Ionizantes": "µT",
+    "Exposição à Radiações Não-ionizantes": "µT",
+    "Radiações Ionizantes": "µT",
+    "Radiações Não-Ionizantes": "µT",
+    "Pressão Atmosférica Anormal": "kV/m",
+    "Pressões Anormais": "kV/m",
+    "Iluminação inadequada": "lx",
 }
 
-# === BASE DE RISCOS EXPANDIDA DO PGR (142 RISCOS) ===
-RISCOS_PGR = {
-    "quimico": [
-        "Exposição a Produto Químico"
-    ],
-    "fisico": [
-        "Ambiente Artificialmente Frio",
-        "Exposição ao Ruído",
-        "Exposição à Radiações Ionizantes",
-        "Exposição à Radiações Não-ionizantes",
-        "Exposição à Temperatura Ambiente Baixa",
-        "Exposição à Temperatura Ambiente Elevada",
-        "Pressão Atmosférica Anormal (condições hiperbáricas)",
-        "Vibração de Corpo Inteiro (AREN)",
-        "Vibração de Corpo Inteiro (VDVR)",
-        "Vibrações Localizadas (mão/braço)",
-        "Vibrações Localizadas em partes do corpo"
-    ],
-    "biologico": [
-        "Água e/ou alimentos contaminados",
-        "Contaminação pelo Corona Vírus",
-        "Contato com Fluido Orgânico (sangue, hemoderivados, secreções, excreções)",
-        "Contato com Pessoas Doentes e/ou Material Infectocontagiante",
-        "Exposição à Agentes Microbiológicos (fungos, bactérias, vírus, protozoários, parasitas)"
-    ],
-    "ergonomico": [
-        "Assento inadequado",
-        "Assédio de qualquer natureza no trabalho",
-        "Cadência do trabalho imposta por um equipamento",
-        "Compressão de partes do corpo por superfícies rígidas ou com quinas vivas",
-        "Conflitos hierárquicos no trabalho",
-        "Controle rígido de produtividade",
-        "Desconforto, constrangimento e/ou perturbação da situação de trabalho",
-        "Dupla jornada de trabalho",
-        "Equipamento e mobiliário inadequados às condições morfológicas",
-        "Escassez de recursos/pessoas para execução das atividades",
-        "Esforço físico intenso",
-        "Falta de pausas, intervalos e descansos adequados",
-        "Falta de treinamento/orientação para o trabalho",
-        "Frequente ação de empurrar/puxar cargas ou volumes",
-        "Frequente deslocamento à pé durante à jornada de trabalho",
-        "Frequente execução de movimentos repetitivos",
-        "Iluminação inadequada (deficiente ou excessiva)",
-        "Inadequação de layout do ambiente de trabalho",
-        "Inadequação do ritmo de trabalho",
-        "Jornada de trabalho prolongada",
-        "Levantamento e transporte manual de cargas ou volumes",
-        "Limitação de espaço para execução de movimentos",
-        "Manuseio de ferramentas e/ou objetos pesados por longos períodos",
-        "Monotonia, repetitividade das tarefas",
-        "Necessidade de alta concentração mental e atenção para o trabalho",
-        "Organização do trabalho inadequada",
-        "Pausa para descanso insuficiente",
-        "Postura em pé por longos períodos",
-        "Postura sentada por longos períodos",
-        "Posturas incômodas/pouco confortáveis por longos períodos",
-        "Pressão de tempo para cumprir tarefas/pressão temporal",
-        "Pressão de hierarquia/chefias",
-        "Problemas no relacionamento interpessoal",
-        "Queda de mesmo nível ou a pequena altura",
-        "Qualidade do ar no ambiente de trabalho",
-        "Responsabilidades e complexidades da tarefa",
-        "Ritmo de trabalho acelerado",
-        "Sobrecarga de funções",
-        "Trabalho em turnos e noturno",
-        "Trabalho monótono, repetitivo",
-        "Uso de equipamento de proteção individual inadequado",
-        "Uso frequente de força, pressão, preensão, flexão, extensão ou torção dos segmentos corporais",
-        "Utilização de instrumentos que produzem vibrações",
-        "Velocidade de execução",
-        "Ventilação inadequada (deficiente ou excessiva)"
-    ],
-    "acidente": [
-        "Absorção (por contato) de substância cáustica, tóxica ou nociva",
-        "Afogamento, imersão, engolfamento",
-        "Aprisionamento em, sob ou entre",
-        "Aprisionamento em, sob ou entre desabamento ou desmoronamento de edificação, estrutura, barreira, etc.",
-        "Aprisionamento em, sob ou entre dois ou mais objetos em movimento (sem encaixe)",
-        "Aprisionamento em, sob ou entre objetos em movimento convergente",
-        "Aprisionamento em, sob ou entre um objeto parado e outro em movimento",
-        "Arestas cortantes, superfícies com rebarbas, farpas ou elementos de fixação expostos",
-        "Ataque de ser vivo por mordedura, picada, chifrada, coice, etc.",
-        "Choque contra objeto imóvel (pessoa em movimento)",
-        "Choque entre dois objetos em movimento, sendo um deles a pessoa que sofre a lesão",
-        "Colisão entre pessoas",
-        "Contato com chama aberta",
-        "Contato com corrente elétrica",
-        "Contato com objetos ou ambientes aquecidos (queimaduras)",
-        "Contato com objetos ou ambientes resfriados (queimaduras por frio)",
-        "Contato com substâncias cáusticas, tóxicas (por inalação ou ingestão)",
-        "Desabamento, desmoronamento, soterramento",
-        "Esforços excessivos ou inadequados",
-        "Escorregões e tropeços com queda",
-        "Explosão",
-        "Exposição a gases e vapores",
-        "Ferimento por objeto cortante ou pontiagudo",
-        "Golpe por objeto lançado, projetado ou que cai",
-        "Impacto causado por objeto que cai",
-        "Impacto de pessoa contra objeto ou estrutura",
-        "Incêndio",
-        "Lesões por esforços repetitivos ou sobrecarga",
-        "Objeto cortante ou perfurante",
-        "Perfuração por objeto pontiagudo",
-        "Pisadela, pancada ou choque contra objeto imóvel",
-        "Projeção de fragmentos ou partículas",
-        "Queda com diferença de nível",
-        "Queda de mesmo nível",
-        "Queda de objetos, materiais, ferramentas ou estruturas",
-        "Queimaduras por contato com superfícies quentes",
-        "Ruptura de reservatório sob pressão",
-        "Transporte de pessoas"
-    ]
-}
+# === BASE DE RISCOS EXPANDIDA ===
+AGENTES_DE_RISCO_ORIGINAL = sorted([
+    "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
+    "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
+    "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias", 
+    "Protozoários", "Fungos", "Parasitas", "Bacilos"
+])
 
-# Manter compatibilidade com código original
-AGENTES_DE_RISCO = []
-for categoria, riscos in RISCOS_PGR.items():
-    AGENTES_DE_RISCO.extend(riscos)
-AGENTES_DE_RISCO = sorted(AGENTES_DE_RISCO)
+NOVOS_RISCOS = [
+    "Vibração de Corpo Inteiro (AREN)",
+    "Vibração de Corpo Inteiro (VDVR)", 
+    "Exposição ao Ruído",
+    "Ambiente Artificialmente Frio",
+    "Exposição à Temperatura Ambiente Baixa",
+    "Exposição à Temperatura Ambiente Elevada",
+    "Pressão Atmosférica Anormal (condições hiperbáricas)",
+    "Vibrações Localizadas (mão/braço)",
+    "Vibrações Localizadas em partes do corpo",
+    "Exposição a Produto Químico",
+    "Água e/ou alimentos contaminados",
+    "Contaminação pelo Corona Vírus", 
+    "Contato com Fluido Orgânico (sangue, hemoderivados, secreções, excreções)",
+    "Contato com Pessoas Doentes e/ou Material Infectocontagiante",
+    "Exposição à Agentes Microbiológicos (fungos, bactérias, vírus, protozoários, parasitas)"
+]
+
+AGENTES_DE_RISCO = sorted(list(set(AGENTES_DE_RISCO_ORIGINAL + NOVOS_RISCOS)))
 
 CATEGORIAS_RISCO = {
     'fisico': '🔥 Físicos', 
@@ -238,288 +123,428 @@ CATEGORIAS_RISCO = {
     'acidente': '⚠️ Acidentes'
 }
 
-# === CORES E ÍCONES POR CATEGORIA ===
-CATEGORIA_VISUAL = {
-    'fisico': {'cor': '#FF6B35', 'cor_bg': '#FFF5F3', 'icone': '🔥'},
-    'quimico': {'cor': '#8E44AD', 'cor_bg': '#F8F5FB', 'icone': '⚗️'},
-    'biologico': {'cor': '#16A085', 'cor_bg': '#F1F9F7', 'icone': '🦠'},
-    'ergonomico': {'cor': '#3498DB', 'cor_bg': '#F3F8FC', 'icone': '🏃'},
-    'acidente': {'cor': '#E74C3C', 'cor_bg': '#FDF2F2', 'icone': '⚠️'}
-}
-
-# --- Função para obter unidade automática ---
-def obter_unidade_automatica(agente_risco):
-    """Retorna a unidade de medida automática para um agente de risco"""
-    return UNIDADES_AUTOMATICAS.get(agente_risco, "Não aplicável")
-
-# --- Inicialização dos Gerenciadores com fallback ---
+# --- Inicialização dos Gerenciadores ---
 @st.cache_resource
 def init_managers():
     if USE_LOCAL_DB:
         try:
             db_manager = DatabaseManager()
-            auth_manager = AuthManager(db_manager)
+            auth_manager = AuthManager(db_manager)  
             user_data_manager = UserDataManager(db_manager)
             return db_manager, auth_manager, user_data_manager
-        except Exception as e:
-            st.error(f"Erro ao inicializar banco de dados: {e}")
+        except:
             return None, None, None
-    else:
-        return None, None, None
+    return None, None, None
 
-# Inicialização segura
 if USE_LOCAL_DB:
     db_manager, auth_manager, user_data_manager = init_managers()
 else:
     db_manager, auth_manager, user_data_manager = None, None, None
 
-# --- CSS PERSONALIZADO MELHORADO PARA VISUALIZAÇÃO ---
+# --- Funções Auxiliares ---
+def obter_unidade_automatica(agente_risco):
+    return UNIDADES_AUTOMATICAS.get(agente_risco, "Não aplicável")
+
+def get_user_data():
+    return st.session_state.get('user_data', {
+        'risks_salvos': [],
+        'creditos': 10,
+        'os_geradas_total': 0,
+        'ultimo_uso': 'Nunca',
+        'historico_os': []  # Novo campo para histórico
+    })
+
+def save_user_data(data):
+    if 'user_data' not in st.session_state:
+        st.session_state.user_data = {}
+    st.session_state.user_data.update(data)
+    
+    if USE_LOCAL_DB and user_data_manager:
+        try:
+            user_data_manager.save_user_data(data)
+        except:
+            pass
+
+def is_authenticated():
+    return st.session_state.get("authenticated", False)
+
+def get_current_user():
+    return st.session_state.get("user_info", {
+        'nome': 'Usuário Demo',
+        'email': 'demo@gerador-os.com'
+    })
+
+# === FUNÇÕES APRIMORADAS DE PROCESSAMENTO DOCX ===
+
+def replace_placeholders_advanced(doc, replacements):
+    """Substitui placeholders no documento Word com suporte avançado"""
+    # Substituir em parágrafos
+    for paragraph in doc.paragraphs:
+        for key, value in replacements.items():
+            if key in paragraph.text:
+                # Preservar formatação original
+                for run in paragraph.runs:
+                    if key in run.text:
+                        run.text = run.text.replace(key, str(value))
+                paragraph.text = paragraph.text.replace(key, str(value))
+    
+    # Substituir em tabelas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    for key, value in replacements.items():
+                        if key in paragraph.text:
+                            paragraph.text = paragraph.text.replace(key, str(value))
+    
+    # Substituir em cabeçalhos e rodapés
+    for section in doc.sections:
+        # Cabeçalho
+        header = section.header
+        for paragraph in header.paragraphs:
+            for key, value in replacements.items():
+                if key in paragraph.text:
+                    paragraph.text = paragraph.text.replace(key, str(value))
+        
+        # Rodapé
+        footer = section.footer
+        for paragraph in footer.paragraphs:
+            for key, value in replacements.items():
+                if key in paragraph.text:
+                    paragraph.text = paragraph.text.replace(key, str(value))
+
+def add_risk_table_to_doc(doc, risks_salvos):
+    """Adiciona uma tabela formatada com os riscos ao documento"""
+    if not risks_salvos:
+        return
+    
+    # Encontrar posição para inserir tabela (após {{RISCOS_TABELA}})
+    target_paragraph = None
+    for paragraph in doc.paragraphs:
+        if "{{RISCOS_TABELA}}" in paragraph.text:
+            target_paragraph = paragraph
+            break
+    
+    if target_paragraph:
+        # Limpar o placeholder
+        target_paragraph.text = target_paragraph.text.replace("{{RISCOS_TABELA}}", "")
+        
+        # Criar tabela
+        table = doc.add_table(rows=1, cols=4)
+        table.style = 'Table Grid'
+        
+        # Cabeçalho da tabela
+        header_cells = table.rows[0].cells
+        header_cells[0].text = 'Categoria'
+        header_cells[1].text = 'Tipo de Risco'
+        header_cells[2].text = 'Unidade'
+        header_cells[3].text = 'Automático'
+        
+        # Formatar cabeçalho
+        for cell in header_cells:
+            cell.paragraphs[0].runs[0].bold = True
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Adicionar dados dos riscos
+        for risk in risks_salvos:
+            row_cells = table.add_row().cells
+            row_cells[0].text = CATEGORIAS_RISCO.get(risk.get('categoria', ''), 'N/A')
+            row_cells[1].text = risk.get('tipo', 'N/A')
+            row_cells[2].text = risk.get('unidade', 'N/A')
+            row_cells[3].text = 'Sim' if risk.get('unidade_automatica', False) else 'Não'
+
+def processar_planilha_avancada(excel_file):
+    """Processa planilha com validação avançada"""
+    try:
+        df = pd.read_excel(excel_file)
+        
+        # Normalizar nomes das colunas
+        df.columns = df.columns.str.strip().str.title()
+        
+        # Mapear colunas comuns
+        column_mapping = {
+            'Name': 'Nome',
+            'Employee': 'Nome',
+            'Funcionario': 'Nome',
+            'Position': 'Cargo',
+            'Job': 'Cargo',
+            'Function': 'Cargo',
+            'Department': 'Setor',
+            'Departamento': 'Setor',
+            'Area': 'Setor',
+            'Id': 'Matricula',
+            'Employee_Id': 'Matricula',
+            'Registration': 'Matricula'
+        }
+        
+        # Aplicar mapeamento
+        for old_col, new_col in column_mapping.items():
+            if old_col in df.columns:
+                df.rename(columns={old_col: new_col}, inplace=True)
+        
+        # Validar colunas obrigatórias
+        required_columns = ['Nome']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            st.warning(f"Colunas obrigatórias não encontradas: {missing_columns}")
+        
+        # Preencher valores em branco
+        df.fillna({
+            'Nome': 'Nome não informado',
+            'Cargo': 'Cargo não informado',
+            'Setor': 'Setor não informado',
+            'Matricula': 'N/A'
+        }, inplace=True)
+        
+        return df.to_dict('records')
+        
+    except Exception as e:
+        st.error(f"Erro ao processar planilha: {e}")
+        return []
+
+def gerar_documentos_os_avancados(template_file, excel_file, risks_salvos):
+    """Gera documentos de OS com recursos avançados e histórico"""
+    try:
+        funcionarios = processar_planilha_avancada(excel_file)
+        if not funcionarios:
+            return None, None
+        
+        zip_buffer = BytesIO()
+        historico_geracao = []
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for idx, funcionario in enumerate(funcionarios):
+                doc = Document(template_file)
+                
+                # Preparar texto dos riscos
+                riscos_texto = "\n".join([
+                    f"• {risk.get('tipo', 'N/A')} ({CATEGORIAS_RISCO.get(risk.get('categoria', ''), 'N/A')}) - {risk.get('unidade', 'N/A')}"
+                    for risk in risks_salvos
+                ])
+                
+                # Separar riscos por categoria para relatório
+                riscos_por_categoria = {}
+                for risk in risks_salvos:
+                    categoria = risk.get('categoria', 'outros')
+                    if categoria not in riscos_por_categoria:
+                        riscos_por_categoria[categoria] = []
+                    riscos_por_categoria[categoria].append(risk)
+                
+                # Criar texto detalhado por categoria
+                riscos_detalhados = ""
+                for categoria, riscos in riscos_por_categoria.items():
+                    categoria_nome = CATEGORIAS_RISCO.get(categoria, categoria.title())
+                    riscos_detalhados += f"\n{categoria_nome}:\n"
+                    for risk in riscos:
+                        auto_badge = " (Automático)" if risk.get('unidade_automatica', False) else ""
+                        riscos_detalhados += f"  • {risk.get('tipo', 'N/A')} - {risk.get('unidade', 'N/A')}{auto_badge}\n"
+                
+                # Placeholders expandidos
+                data_atual = datetime.now()
+                replacements = {
+                    # Dados básicos
+                    '{{NOME}}': funcionario.get('Nome', 'Nome não informado'),
+                    '{{CARGO}}': funcionario.get('Cargo', 'Cargo não informado'),
+                    '{{SETOR}}': funcionario.get('Setor', 'Setor não informado'),
+                    '{{MATRICULA}}': str(funcionario.get('Matricula', 'N/A')),
+                    
+                    # Datas
+                    '{{DATA}}': data_atual.strftime("%d/%m/%Y"),
+                    '{{DATA_COMPLETA}}': data_atual.strftime("%d de %B de %Y"),
+                    '{{HORA}}': data_atual.strftime("%H:%M"),
+                    '{{MES}}': data_atual.strftime("%B"),
+                    '{{ANO}}': data_atual.strftime("%Y"),
+                    
+                    # Riscos
+                    '{{RISCOS}}': riscos_texto,
+                    '{{RISCOS_DETALHADOS}}': riscos_detalhados,
+                    '{{TOTAL_RISCOS}}': str(len(risks_salvos)),
+                    '{{TOTAL_CATEGORIAS}}': str(len(riscos_por_categoria)),
+                    
+                    # Estatísticas
+                    '{{RISCOS_AUTOMATICOS}}': str(sum(1 for r in risks_salvos if r.get('unidade_automatica', False))),
+                    '{{RISCOS_MANUAIS}}': str(sum(1 for r in risks_salvos if not r.get('unidade_automatica', False))),
+                    
+                    # Informações do sistema
+                    '{{USUARIO}}': get_current_user().get('nome', 'Sistema'),
+                    '{{EMAIL_USUARIO}}': get_current_user().get('email', 'sistema@os.com'),
+                    '{{VERSAO_SISTEMA}}': "3.1",
+                    '{{ID_GERACAO}}': str(uuid.uuid4())[:8].upper()
+                }
+                
+                # Substituir placeholders
+                replace_placeholders_advanced(doc, replacements)
+                
+                # Adicionar tabela de riscos se solicitada
+                add_risk_table_to_doc(doc, risks_salvos)
+                
+                # Salvar documento no ZIP
+                doc_buffer = BytesIO()
+                doc.save(doc_buffer)
+                doc_buffer.seek(0)
+                
+                nome_limpo = re.sub(r'[^\w\s-]', '', funcionario.get('Nome', f'Funcionario_{idx+1}')).replace(' ', '_')
+                nome_arquivo = f"OS_{nome_limpo}_{data_atual.strftime('%Y%m%d')}.docx"
+                zip_file.writestr(nome_arquivo, doc_buffer.read())
+                
+                # Registrar no histórico
+                historico_item = {
+                    'funcionario': funcionario.get('Nome', 'N/A'),
+                    'cargo': funcionario.get('Cargo', 'N/A'),
+                    'setor': funcionario.get('Setor', 'N/A'),
+                    'matricula': str(funcionario.get('Matricula', 'N/A')),
+                    'total_riscos': len(risks_salvos),
+                    'riscos_automaticos': sum(1 for r in risks_salvos if r.get('unidade_automatica', False)),
+                    'data_geracao': data_atual.isoformat(),
+                    'arquivo': nome_arquivo,
+                    'id_geracao': replacements['{{ID_GERACAO}}']
+                }
+                historico_geracao.append(historico_item)
+        
+        zip_buffer.seek(0)
+        return zip_buffer, historico_geracao
+        
+    except Exception as e:
+        st.error(f"Erro ao gerar documentos: {e}")
+        return None, None
+
+def gerar_relatorio_os(historico_geracao, risks_salvos):
+    """Gera relatório detalhado das OS geradas"""
+    if not historico_geracao:
+        return None
+    
+    # Criar documento do relatório
+    doc = Document()
+    
+    # Título
+    titulo = doc.add_heading('RELATÓRIO DE ORDENS DE SERVIÇO GERADAS', 0)
+    titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Informações gerais
+    doc.add_heading('1. RESUMO EXECUTIVO', level=1)
+    
+    data_geracao = datetime.now()
+    info_geral = doc.add_paragraph()
+    info_geral.add_run(f"Data de Geração: ").bold = True
+    info_geral.add_run(f"{data_geracao.strftime('%d/%m/%Y às %H:%M')}\n")
+    info_geral.add_run(f"Total de OS Geradas: ").bold = True
+    info_geral.add_run(f"{len(historico_geracao)}\n")
+    info_geral.add_run(f"Total de Riscos Avaliados: ").bold = True
+    info_geral.add_run(f"{len(risks_salvos)}\n")
+    info_geral.add_run(f"Riscos com Unidade Automática: ").bold = True
+    info_geral.add_run(f"{sum(1 for r in risks_salvos if r.get('unidade_automatica', False))}\n")
+    
+    # Estatísticas por setor
+    doc.add_heading('2. DISTRIBUIÇÃO POR SETOR', level=1)
+    
+    setores = {}
+    for item in historico_geracao:
+        setor = item['setor']
+        if setor not in setores:
+            setores[setor] = 0
+        setores[setor] += 1
+    
+    for setor, count in sorted(setores.items()):
+        p = doc.add_paragraph()
+        p.add_run(f"• {setor}: ").bold = True
+        p.add_run(f"{count} funcionário(s)")
+    
+    # Lista detalhada de riscos
+    doc.add_heading('3. RISCOS AVALIADOS', level=1)
+    
+    # Agrupar riscos por categoria
+    riscos_por_categoria = {}
+    for risk in risks_salvos:
+        categoria = risk.get('categoria', 'outros')
+        if categoria not in riscos_por_categoria:
+            riscos_por_categoria[categoria] = []
+        riscos_por_categoria[categoria].append(risk)
+    
+    for categoria, riscos in riscos_por_categoria.items():
+        categoria_nome = CATEGORIAS_RISCO.get(categoria, categoria.title())
+        doc.add_heading(f"3.{list(riscos_por_categoria.keys()).index(categoria) + 1} {categoria_nome}", level=2)
+        
+        for risk in riscos:
+            p = doc.add_paragraph()
+            p.add_run(f"• {risk.get('tipo', 'N/A')}")
+            p.add_run(f" - Unidade: {risk.get('unidade', 'N/A')}")
+            if risk.get('unidade_automatica', False):
+                p.add_run(" (Detectado automaticamente)").italic = True
+    
+    # Tabela detalhada dos funcionários
+    doc.add_heading('4. FUNCIONÁRIOS AVALIADOS', level=1)
+    
+    # Criar tabela
+    table = doc.add_table(rows=1, cols=6)
+    table.style = 'Table Grid'
+    
+    # Cabeçalho
+    header_cells = table.rows[0].cells
+    headers = ['Nome', 'Cargo', 'Setor', 'Matrícula', 'Total Riscos', 'ID Geração']
+    for i, header in enumerate(headers):
+        header_cells[i].text = header
+        header_cells[i].paragraphs[0].runs[0].bold = True
+        header_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Dados
+    for item in historico_geracao:
+        row_cells = table.add_row().cells
+        row_cells[0].text = item['funcionario']
+        row_cells[1].text = item['cargo']
+        row_cells[2].text = item['setor']
+        row_cells[3].text = item['matricula']
+        row_cells[4].text = str(item['total_riscos'])
+        row_cells[5].text = item['id_geracao']
+    
+    # Rodapé
+    doc.add_page_break()
+    doc.add_heading('5. OBSERVAÇÕES', level=1)
+    obs = doc.add_paragraph()
+    obs.add_run("• Este relatório foi gerado automaticamente pelo Sistema Gerador de OS v3.1\n")
+    obs.add_run("• Todos os riscos foram avaliados conforme base de dados do PGR\n")
+    obs.add_run("• Unidades de medida automáticas: VDVR (m/s¹⁷⁵), AREN (m/s²), Ruído (dB(A)), etc.\n")
+    obs.add_run(f"• Usuário responsável: {get_current_user().get('nome', 'Sistema')}\n")
+    obs.add_run(f"• Email: {get_current_user().get('email', 'sistema@os.com')}")
+    
+    # Salvar em buffer
+    relatorio_buffer = BytesIO()
+    doc.save(relatorio_buffer)
+    relatorio_buffer.seek(0)
+    
+    return relatorio_buffer
+
+# === CSS E COMPONENTES MANTIDOS ===
 st.markdown("""
 <style>
-    /* === VARIÁVEIS CSS === */
     :root {
         --primary-color: #1f77b4;
-        --secondary-color: #ff7f0e;
         --success-color: #2ca02c;
         --warning-color: #ff7f0e;
-        --error-color: #d62728;
-        --background-dark: #0e1117;
-        --background-light: #262730;
         --card-background: #1e1e2e;
         --text-primary: #ffffff;
         --text-secondary: #b3b3b3;
         --border-color: #3d3d3d;
-        --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         --border-radius: 12px;
-        
-        /* Cores específicas por categoria */
-        --fisico-color: #FF6B35;
-        --fisico-bg: rgba(255, 107, 53, 0.1);
-        --quimico-color: #8E44AD;
-        --quimico-bg: rgba(142, 68, 173, 0.1);
-        --biologico-color: #16A085;
-        --biologico-bg: rgba(22, 160, 133, 0.1);
-        --ergonomico-color: #3498DB;
-        --ergonomico-bg: rgba(52, 152, 219, 0.1);
-        --acidente-color: #E74C3C;
-        --acidente-bg: rgba(231, 76, 60, 0.1);
     }
 
-    /* === LAYOUT GERAL === */
-    .main > div {
-        padding-top: 2rem;
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #0e1117 0%, #1a1a2e 100%);
-    }
+    .main > div { padding-top: 2rem; }
+    .stApp { background: linear-gradient(135deg, #0e1117 0%, #1a1a2e 100%); }
 
-    /* === SIDEBAR MELHORADA === */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #1e1e2e 0%, #2d2d3a 100%);
-        border-right: 1px solid var(--border-color);
-    }
-
-    /* === CARDS E CONTAINERS MELHORADOS === */
     .metric-card {
         background: var(--card-background);
         padding: 1.5rem;
         border-radius: var(--border-radius);
         border: 1px solid var(--border-color);
-        box-shadow: var(--shadow);
         margin-bottom: 1rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.2s ease;
     }
-    
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-    }
+    .metric-card:hover { transform: translateY(-2px); }
 
-    /* === CARDS DE RISCO MELHORADOS === */
-    .risk-card-enhanced {
-        background: var(--card-background);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-        padding: 1.5rem;
-        margin: 1rem 0;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .risk-card-enhanced::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
-        width: 4px;
-        transition: all 0.3s ease;
-    }
-
-    .risk-card-enhanced.fisico::before { background: var(--fisico-color); }
-    .risk-card-enhanced.quimico::before { background: var(--quimico-color); }
-    .risk-card-enhanced.biologico::before { background: var(--biologico-color); }
-    .risk-card-enhanced.ergonomico::before { background: var(--ergonomico-color); }
-    .risk-card-enhanced.acidente::before { background: var(--acidente-color); }
-
-    .risk-card-enhanced:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-        border-color: var(--primary-color);
-    }
-
-    .risk-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1rem;
-    }
-
-    .risk-title {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex: 1;
-    }
-
-    .risk-icon {
-        font-size: 2rem;
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-    }
-
-    .risk-category-name {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .risk-content {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-
-    .risk-type {
-        font-size: 1rem;
-        color: var(--text-primary);
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        line-height: 1.4;
-    }
-
-    .risk-details {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        margin-top: 0.75rem;
-    }
-
-    .risk-detail-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        background: rgba(255, 255, 255, 0.08);
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
-    }
-
-    .risk-detail-label {
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .risk-detail-value {
-        color: var(--text-primary);
-        font-weight: 600;
-    }
-
-    .risk-actions {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-    }
-
-    /* === STATUS BADGES MELHORADOS === */
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border-radius: 25px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        transition: all 0.2s ease;
-    }
-
-    .status-success {
-        background: linear-gradient(45deg, #2ca02c, #27ae60);
-        color: white;
-        box-shadow: 0 2px 8px rgba(44, 160, 44, 0.3);
-    }
-
-    .status-auto {
-        background: linear-gradient(45deg, #3498db, #2980b9);
-        color: white;
-        box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
-    }
-
-    .unit-auto-badge {
-        background: linear-gradient(45deg, #e67e22, #d35400);
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 15px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        box-shadow: 0 2px 4px rgba(230, 126, 34, 0.3);
-    }
-
-    /* === BOTÕES MELHORADOS === */
-    .stButton > button {
-        background: linear-gradient(45deg, var(--primary-color), #1565c0);
-        color: white;
-        border: none;
-        border-radius: var(--border-radius);
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow);
-    }
-
-    .stButton > button:hover {
-        background: linear-gradient(45deg, #1565c0, var(--primary-color));
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(31, 119, 180, 0.4);
-    }
-
-    /* === FORMULÁRIOS === */
-    .stSelectbox > div > div {
-        background: var(--card-background);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-    }
-
-    .stTextInput > div > div {
-        background: var(--card-background);
-        border: 1px solid var(--border-color);
-        border-radius: var(--border-radius);
-    }
-
-    /* === CABEÇALHOS === */
     .main-header {
-        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        background: linear-gradient(90deg, var(--primary-color), var(--warning-color));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        background-clip: text;
         font-size: 2.5rem;
         font-weight: 700;
         text-align: center;
@@ -535,387 +560,71 @@ st.markdown("""
         border-bottom: 2px solid var(--primary-color);
     }
 
-    /* === ALERTAS PERSONALIZADOS === */
-    .custom-alert {
+    .alert {
         padding: 1rem;
         border-radius: var(--border-radius);
         margin: 1rem 0;
         border-left: 4px solid;
     }
-
     .alert-info {
         background: rgba(31, 119, 180, 0.1);
         border-left-color: var(--primary-color);
         color: var(--text-primary);
     }
-
     .alert-success {
         background: rgba(44, 160, 44, 0.1);
         border-left-color: var(--success-color);
         color: var(--text-primary);
     }
-
     .alert-warning {
         background: rgba(255, 127, 14, 0.1);
         border-left-color: var(--warning-color);
         color: var(--text-primary);
     }
 
-    /* === ESTATÍSTICAS VISUAIS === */
-    .category-stats {
-        display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.5rem;
-    }
-
-    .stat-item {
-        background: var(--card-background);
-        border: 1px solid var(--border-color);
+    .report-card {
+        background: linear-gradient(135deg, #2c3e50, #3498db);
+        color: white;
+        padding: 1.5rem;
         border-radius: var(--border-radius);
-        padding: 1rem;
-        text-align: center;
-        min-width: 120px;
-        flex: 1;
-    }
-
-    .stat-number {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary-color);
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-label {
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* === ANIMAÇÕES === */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .fade-in {
-        animation: fadeIn 0.5s ease-out;
-    }
-
-    @keyframes slideIn {
-        from { opacity: 0; transform: translateX(-20px); }
-        to { opacity: 1; transform: translateX(0); }
-    }
-
-    .slide-in {
-        animation: slideIn 0.4s ease-out;
-    }
-
-    /* === RESPONSIVIDADE === */
-    @media (max-width: 768px) {
-        .risk-card-enhanced {
-            padding: 1rem;
-        }
-        
-        .risk-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-        
-        .risk-details {
-            flex-direction: column;
-            gap: 0.5rem;
-        }
+        margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÕES AUXILIARES PARA GERENCIAMENTO DE ESTADO ---
-
-def get_user_data():
-    """Carrega dados do usuário do session_state"""
-    return st.session_state.get('user_data', {
-        'risks_salvos': [],
-        'creditos': 0,
-        'os_geradas_total': 0,
-        'ultimo_uso': 'Nunca'
-    })
-
-def save_user_data(data):
-    """Salva dados do usuário no session_state"""
-    if 'user_data' not in st.session_state:
-        st.session_state.user_data = {}
-    st.session_state.user_data.update(data)
-
-def is_authenticated():
-    """Verifica se o usuário está autenticado"""
-    return st.session_state.get("authenticated", False)
-
-def get_current_user():
-    """Retorna informações do usuário atual"""
-    return st.session_state.get("user_info", {
-        'nome': 'Usuário Demo',
-        'email': 'demo@gerador-os.com'
-    })
-
-# --- COMPONENTES UI MELHORADOS ---
-
-def create_metric_card(title, value, delta=None, help_text=None):
-    """Cria um card de métrica visual aprimorado"""
-    delta_html = ""
-    if delta:
-        delta_color = "var(--success-color)" if delta > 0 else "var(--error-color)"
-        delta_symbol = "↑" if delta > 0 else "↓"
-        delta_html = f'<div style="color: {delta_color}; font-size: 0.9rem; margin-top: 0.5rem;">{delta_symbol} {abs(delta)}%</div>'
-    
+def create_metric_card(title, value, help_text=None):
     help_html = ""
     if help_text:
         help_html = f'<div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem;">{help_text}</div>'
     
     st.markdown(f"""
-    <div class="metric-card fade-in">
-        <div style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">{title}</div>
+    <div class="metric-card">
+        <div style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase;">{title}</div>
         <div style="color: var(--text-primary); font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{value}</div>
-        {delta_html}
         {help_html}
     </div>
     """, unsafe_allow_html=True)
 
-def show_risk_statistics():
-    """Mostra estatísticas dos riscos disponíveis"""
-    st.markdown("""
-    <div class="category-stats">
-        <div class="stat-item">
-            <div class="stat-number">142</div>
-            <div class="stat-label">Total de Riscos</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">68</div>
-            <div class="stat-label">Acidentes</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">57</div>
-            <div class="stat-label">Ergonômicos</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">11</div>
-            <div class="stat-label">Físicos</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">5</div>
-            <div class="stat-label">Biológicos</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-number">1</div>
-            <div class="stat-label">Químicos</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def create_enhanced_risk_card(risk, idx):
-    """Cria um card de risco visualmente aprimorado"""
-    categoria = risk.get('categoria', 'outros')
-    visual = CATEGORIA_VISUAL.get(categoria, CATEGORIA_VISUAL['fisico'])
-    categoria_display = CATEGORIAS_RISCO.get(categoria, '📋 Outros')
-    unidade = risk.get('unidade', 'N/A')
-    eh_automatica = risk.get('unidade_automatica', False)
-    
-    unidade_badge = ""
-    if eh_automatica:
-        unidade_badge = '<span class="unit-auto-badge">AUTO</span>'
-    
-    st.markdown(f"""
-    <div class="risk-card-enhanced {categoria} slide-in" style="animation-delay: {idx * 0.1}s;">
-        <div class="risk-header">
-            <div class="risk-title">
-                <span class="risk-icon">{visual['icone']}</span>
-                <span class="risk-category-name">{categoria_display}</span>
-            </div>
-            <div class="risk-actions">
-                <span class="status-badge status-success">
-                    <span>✓</span>
-                    <span>Ativo</span>
-                </span>
-            </div>
-        </div>
-        
-        <div class="risk-content">
-            <div class="risk-type">{risk.get('tipo', 'N/A')}</div>
-            
-            <div class="risk-details">
-                <div class="risk-detail-item">
-                    <span class="risk-detail-label">Unidade:</span>
-                    <span class="risk-detail-value">{unidade}</span>
-                    {unidade_badge}
-                </div>
-                <div class="risk-detail-item">
-                    <span class="risk-detail-label">Categoria:</span>
-                    <span class="risk-detail-value">{categoria.title()}</span>
-                </div>
-                <div class="risk-detail-item">
-                    <span class="risk-detail-label">ID:</span>
-                    <span class="risk-detail-value">{risk.get('id', 'N/A')[:8]}...</span>
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def create_risk_summary_card(risks_salvos):
-    """Cria um card visual para resumo de riscos com visualização aprimorada"""
-    if not risks_salvos:
-        st.markdown("""
-        <div class="custom-alert alert-info">
-            <strong>ℹ️ Nenhum risco selecionado</strong><br>
-            Adicione riscos usando as opções acima para começar a construir sua avaliação.
-        </div>
-        """, unsafe_allow_html=True)
-        return
-    
-    # Contar riscos por categoria
-    risk_counts = {}
-    for risk in risks_salvos:
-        categoria = risk.get('categoria', 'Outros')
-        categoria_display = CATEGORIAS_RISCO.get(categoria, f"📋 {categoria.title()}")
-        risk_counts[categoria_display] = risk_counts.get(categoria_display, 0) + 1
-    
-    st.markdown('<div class="section-header">📊 Resumo de Riscos Selecionados</div>', unsafe_allow_html=True)
-    
-    # Layout em colunas para as métricas
-    cols = st.columns(min(len(risk_counts), 4))
-    for idx, (categoria, count) in enumerate(risk_counts.items()):
-        with cols[idx % 4]:
-            create_metric_card(categoria.split(' ', 1)[-1], count, help_text=f"{count} risco{'s' if count != 1 else ''}")
-    
-    # Controles de visualização
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.markdown('<div class="section-header">📝 Riscos Cadastrados</div>', unsafe_allow_html=True)
-    
-    with col2:
-        view_mode = st.selectbox(
-            "👁️ Modo de Visualização",
-            ["📋 Cards Detalhados", "📝 Lista Compacta", "📊 Tabela"],
-            key="risk_view_mode"
-        )
-    
-    # Mostrar riscos conforme o modo selecionado
-    if "Cards" in view_mode:
-        # Visualização em cards detalhados
-        for idx, risk in enumerate(risks_salvos):
-            col1, col2 = st.columns([5, 1])
-            
-            with col1:
-                create_enhanced_risk_card(risk, idx)
-            
-            with col2:
-                st.markdown("<br>" * 3, unsafe_allow_html=True)  # Espaçamento
-                if st.button("🗑️", key=f"remove_card_{idx}", help="Remover risco"):
-                    risks_salvos.pop(idx)
-                    save_user_data({'risks_salvos': risks_salvos})
-                    st.rerun()
-    
-    elif "Lista" in view_mode:
-        # Visualização em lista compacta
-        for idx, risk in enumerate(risks_salvos):
-            col1, col2 = st.columns([6, 1])
-            
-            with col1:
-                categoria = risk.get('categoria', 'outros')
-                visual = CATEGORIA_VISUAL.get(categoria, CATEGORIA_VISUAL['fisico'])
-                unidade = risk.get('unidade', 'N/A')
-                eh_automatica = risk.get('unidade_automatica', False)
-                
-                unidade_badge = ""
-                if eh_automatica:
-                    unidade_badge = '<span class="unit-auto-badge">AUTO</span>'
-                
-                st.markdown(f"""
-                <div class="risk-card-enhanced {categoria}">
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <span style="font-size: 1.5rem;">{visual['icone']}</span>
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">
-                                {risk.get('tipo', 'N/A')}
-                            </div>
-                            <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                                {categoria.title()} • {unidade} {unidade_badge}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🗑️", key=f"remove_list_{idx}", help="Remover risco"):
-                    risks_salvos.pop(idx)
-                    save_user_data({'risks_salvos': risks_salvos})
-                    st.rerun()
-    
-    else:  # Tabela
-        # Visualização em tabela
-        risk_data = []
-        for idx, risk in enumerate(risks_salvos):
-            categoria = risk.get('categoria', 'outros')
-            visual = CATEGORIA_VISUAL.get(categoria, CATEGORIA_VISUAL['fisico'])
-            
-            risk_data.append({
-                'Categoria': f"{visual['icone']} {categoria.title()}",
-                'Tipo de Risco': risk.get('tipo', 'N/A'),
-                'Unidade': risk.get('unidade', 'N/A'),
-                'Auto': "✅" if risk.get('unidade_automatica', False) else "➖",
-                'Status': "🟢 Ativo",
-                'ID': risk.get('id', 'N/A')[:8] + "..."
-            })
-        
-        if risk_data:
-            df_risks = pd.DataFrame(risk_data)
-            
-            # Configurar o dataframe para exibição
-            st.dataframe(
-                df_risks,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Categoria": st.column_config.TextColumn("🏷️ Categoria", width="medium"),
-                    "Tipo de Risco": st.column_config.TextColumn("🎯 Tipo de Risco", width="large"),
-                    "Unidade": st.column_config.TextColumn("📏 Unidade", width="small"),
-                    "Auto": st.column_config.TextColumn("🤖 Auto", width="small"),
-                    "Status": st.column_config.TextColumn("📊 Status", width="small"),
-                    "ID": st.column_config.TextColumn("🆔 ID", width="small")
-                }
-            )
-            
-            # Botão para limpar todos os riscos
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col2:
-                if st.button("🗑️ Limpar Todos os Riscos", use_container_width=True):
-                    save_user_data({'risks_salvos': []})
-                    st.success("🗑️ Todos os riscos foram removidos!")
-                    time.sleep(1)
-                    st.rerun()
+# === PÁGINAS MANTIDAS + NOVA ABA DE RELATÓRIOS ===
 
 def show_login_page():
-    """Página de login com design melhorado"""
     st.markdown('<div class="main-header">🔐 Sistema Gerador de OS</div>', unsafe_allow_html=True)
     
     st.markdown("""
-    <div class="custom-alert alert-info">
-        <strong>Bem-vindo ao Sistema Demo!</strong><br>
-        Demonstração do Gerador de Ordens de Serviço com visualização aprimorada.
-        <br><br>
-        🎯 <strong>Funcionalidades:</strong> Base expandida com 142 riscos categorizados do PGR!<br>
-        🚀 <strong>Novo:</strong> Visualização aprimorada de riscos com múltiplos modos de exibição!
+    <div class="alert alert-info">
+        <strong>🚀 Sistema Completo com Relatórios!</strong><br>
+        ✅ Preenchimento automático de DOCX com placeholders expandidos<br>
+        ✅ Geração de relatório detalhado das OS<br>
+        ✅ Unidades automáticas: VDVR (m/s¹⁷⁵), AREN (m/s²)<br>
+        ✅ Histórico completo de gerações<br>
+        ✅ Tabelas formatadas nos documentos
     </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🚀 Entrar no Sistema Demo", use_container_width=True, type="primary"):
+        if st.button("🚀 Entrar no Sistema", use_container_width=True, type="primary"):
             st.session_state.authenticated = True
             st.session_state.user_info = {
                 'nome': 'Usuário Demo',
@@ -924,57 +633,42 @@ def show_login_page():
             st.success("✅ Acesso liberado!")
             time.sleep(1)
             st.rerun()
-        
-        st.info("💡 **Modo Demo:** Todas as funcionalidades estão disponíveis para teste!")
 
 def show_main_app():
-    """Interface principal do aplicativo com melhorias visuais"""
-    # Header da aplicação
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div class="main-header">📄 Gerador de OS</div>', unsafe_allow_html=True)
     
-    # Sidebar com informações do usuário
     with st.sidebar:
         user_info = get_current_user()
         st.markdown(f"""
         <div class="metric-card">
             <div style="text-align: center;">
                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">👤</div>
-                <div style="font-weight: 600; color: var(--text-primary);">{user_info.get('nome', 'Usuário')}</div>
-                <div style="color: var(--text-secondary); font-size: 0.9rem;">{user_info.get('email', '')}</div>
+                <div style="font-weight: 600; color: var(--text-primary);">{user_info.get('nome')}</div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">{user_info.get('email')}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="section-header">⚙️ Controles</div>', unsafe_allow_html=True)
-        
-        if st.button("🔄 Limpar sessão", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                if key not in ['authenticated', 'user_info']:
-                    del st.session_state[key]
-            st.rerun()
-        
         if st.button("🚪 Sair", use_container_width=True):
             st.session_state.authenticated = False
-            if 'user_info' in st.session_state:
-                del st.session_state.user_info
             st.rerun()
-            
-        # Informações do sistema
-        st.markdown("---")
-        st.markdown("### 📊 Estatísticas do Sistema")
-        st.metric("Riscos Disponíveis", "142")
-        st.metric("Categorias", "5")
-        st.metric("Versão", "2.2")
         
-        # Informações sobre visualização
         st.markdown("---")
-        st.markdown("### 🎨 Visualização")
-        st.info("✨ Cards Detalhados\n✨ Lista Compacta\n✨ Tabela Interativa")
+        st.markdown("### 📊 Sistema v3.1")
+        st.metric("Placeholders", "15+")
+        st.metric("Relatórios", "Automáticos")
+        st.metric("VDVR/AREN", "Auto")
     
-    # Conteúdo principal com abas organizadas
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Dashboard", "⚠️ Gestão de Riscos", "📄 Gerar OS", "💰 Créditos"])
+    # TABS EXPANDIDAS COM NOVA ABA DE RELATÓRIOS
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🏠 Início", 
+        "⚠️ Gestão de Riscos", 
+        "📄 Gerar OS", 
+        "📊 Relatórios",  # NOVA ABA
+        "💰 Créditos"
+    ])
     
     with tab1:
         show_dashboard()
@@ -983,383 +677,416 @@ def show_main_app():
         show_risk_management()
     
     with tab3:
-        show_os_generation()
+        show_os_generation_advanced()  # VERSÃO APRIMORADA
     
     with tab4:
+        show_reports_page()  # NOVA PÁGINA
+    
+    with tab5:
         show_credits_management()
 
 def show_dashboard():
-    """Dashboard principal com métricas e resumos"""
-    st.markdown('<div class="section-header">📊 Visão Geral</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Dashboard</div>', unsafe_allow_html=True)
     
-    # Carregar dados do usuário
     dados_usuario = get_user_data()
     risks_salvos = dados_usuario.get('risks_salvos', [])
-    creditos = dados_usuario.get('creditos', 0)
     
-    # Métricas principais
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
-        create_metric_card("Riscos Cadastrados", len(risks_salvos), help_text="Total de riscos")
-    
+        create_metric_card("Riscos", len(risks_salvos), "Cadastrados")
     with col2:
-        create_metric_card("Créditos Disponíveis", creditos, help_text="Para geração de OS")
-    
+        create_metric_card("Créditos", dados_usuario.get('creditos', 10), "Disponíveis")
     with col3:
-        os_geradas = dados_usuario.get('os_geradas_total', 0)
-        create_metric_card("OS Geradas", os_geradas, help_text="Histórico total")
-    
+        create_metric_card("OS Geradas", dados_usuario.get('os_geradas_total', 0), "Total")
     with col4:
-        ultimo_uso = dados_usuario.get('ultimo_uso', 'Nunca')
-        create_metric_card("Último Uso", ultimo_uso, help_text="Data da última OS")
-    
-    # Estatísticas da base de riscos
-    st.markdown('<div class="section-header">📋 Base de Riscos PGR</div>', unsafe_allow_html=True)
-    show_risk_statistics()
-    
-    # Informações sobre visualização melhorada
-    st.markdown('<div class="section-header">👁️ Sistema de Visualização Aprimorado</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-        <div class="custom-alert alert-success">
-            <strong>📋 Cards Detalhados</strong><br>
-            Visualização completa com todos os detalhes<br>
-            e códigos de cores por categoria
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="custom-alert alert-info">
-            <strong>📝 Lista Compacta</strong><br>
-            Visualização otimizada para muitos riscos<br>
-            com informações essenciais
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="custom-alert alert-warning">
-            <strong>📊 Tabela Interativa</strong><br>
-            Visualização estruturada com ordenação<br>
-            e filtros por categoria
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Resumo de riscos com visualização aprimorada
-    create_risk_summary_card(risks_salvos)
+        historico_os = dados_usuario.get('historico_os', [])
+        create_metric_card("Relatórios", len(historico_os), "Gerações")
 
 def show_risk_management():
-    """Interface de gerenciamento de riscos melhorada com visualização aprimorada"""
-    st.markdown('<div class="section-header">⚠️ Gerenciamento de Riscos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">⚠️ Gestão de Riscos</div>', unsafe_allow_html=True)
     
-    # Mostrar estatísticas da base de riscos
-    show_risk_statistics()
-    
-    # Formulário de adição de risco
-    with st.expander("➕ Adicionar Novo Risco", expanded=True):
+    with st.expander("➕ Adicionar Risco", expanded=True):
         col1, col2 = st.columns(2)
         
         with col1:
             categoria = st.selectbox(
-                "📂 Categoria do Risco",
+                "📂 Categoria",
                 options=list(CATEGORIAS_RISCO.keys()),
                 format_func=lambda x: CATEGORIAS_RISCO[x],
-                key="nova_categoria"
+                key="categoria_select"
             )
             
-            # Filtrar riscos pela categoria selecionada
-            riscos_da_categoria = RISCOS_PGR.get(categoria, [])
+            # Filtrar agentes por categoria (simplificado)
+            agentes_filtrados = [a for a in AGENTES_DE_RISCO if any(
+                term in a.lower() for term in {
+                    'fisico': ['ruído', 'vibração', 'temperatura', 'radiação', 'frio', 'calor', 'pressão'],
+                    'quimico': ['químico', 'poeira', 'fumo', 'névoa', 'gas', 'vapor'],
+                    'biologico': ['vírus', 'bactéria', 'fungo', 'água', 'corona', 'fluido'],
+                    'ergonomico': ['postur', 'esforç', 'repet', 'carg', 'iluminação'],
+                    'acidente': ['queda', 'choque', 'cortant', 'elétric', 'incênd']
+                }.get(categoria, [])
+            )]
             
-            if riscos_da_categoria:
-                tipo_risco = st.selectbox(
-                    f"🎯 Tipo de Risco ({len(riscos_da_categoria)} disponíveis)", 
-                    riscos_da_categoria, 
-                    key="novo_tipo"
-                )
-            else:
-                tipo_risco = st.text_input("🎯 Digite o tipo de risco", key="novo_tipo_custom")
+            if not agentes_filtrados:
+                agentes_filtrados = AGENTES_DE_RISCO
+            
+            agente = st.selectbox(
+                f"🎯 Agente ({len(agentes_filtrados)} disponíveis)",
+                agentes_filtrados,
+                key="agente_select"
+            )
         
         with col2:
-            # Obter unidade automática
-            if tipo_risco:
-                unidade_auto = obter_unidade_automatica(tipo_risco)
+            if agente:
+                unidade_auto = obter_unidade_automatica(agente)
                 if unidade_auto != "Não aplicável":
-                    st.success(f"🤖 **Unidade automática detectada:** {unidade_auto}")
-                    usar_automatica = st.checkbox("Usar unidade automática", value=True, key="usar_auto")
+                    st.success(f"🤖 **Detectado:** {unidade_auto}")
+                    usar_auto = st.checkbox("Usar automático", value=True, key="usar_auto")
                     
-                    if usar_automatica:
+                    if usar_auto:
                         unidade = unidade_auto
-                        st.info(f"✅ Unidade selecionada: **{unidade}**")
+                        if "VDVR" in agente:
+                            st.balloons()
+                            st.success("🎯 **VDVR** com m/s¹⁷⁵!")
+                        elif "AREN" in agente:
+                            st.balloons()
+                            st.success("📊 **AREN** com m/s²!")
                     else:
-                        unidade = st.selectbox("📏 Unidade de Medida (Manual)", UNIDADES_DE_MEDIDA, key="nova_unidade")
+                        unidade = st.selectbox("📏 Manual", UNIDADES_DE_MEDIDA, key="unidade_manual")
                 else:
-                    unidade = st.selectbox("📏 Unidade de Medida", UNIDADES_DE_MEDIDA, key="nova_unidade")
-                    usar_automatica = False
-            else:
-                unidade = st.selectbox("📏 Unidade de Medida", UNIDADES_DE_MEDIDA, key="nova_unidade")
-                usar_automatica = False
+                    unidade = st.selectbox("📏 Unidade", UNIDADES_DE_MEDIDA, key="unidade_select")
+                    usar_auto = False
             
-            # Mostrar informação sobre a categoria selecionada
-            st.info(f"📊 Categoria selecionada possui **{len(riscos_da_categoria)}** riscos disponíveis")
-            
-            col_add, col_reset = st.columns(2)
-            with col_add:
-                if st.button("✅ Adicionar Risco", use_container_width=True):
-                    if tipo_risco:
-                        dados_usuario = get_user_data()
-                        risks_salvos = dados_usuario.get('risks_salvos', [])
-                        
-                        novo_risco = {
-                            'categoria': categoria,
-                            'tipo': tipo_risco,
-                            'unidade': unidade,
-                            'unidade_automatica': usar_automatica if 'usar_automatica' in locals() else False,
-                            'id': f"{categoria}_{len(risks_salvos)}"
-                        }
-                        
-                        risks_salvos.append(novo_risco)
-                        save_user_data({'risks_salvos': risks_salvos})
-                        
-                        if usar_automatica:
-                            st.success(f"✅ Risco adicionado com unidade automática: **{unidade}**!")
-                        else:
-                            st.success("✅ Risco adicionado com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("❌ Selecione um tipo de risco!")
-            
-            with col_reset:
-                if st.button("🔄 Limpar Todos", use_container_width=True):
-                    save_user_data({'risks_salvos': []})
-                    st.success("🗑️ Todos os riscos foram removidos!")
+            if st.button("✅ Adicionar", use_container_width=True):
+                if agente:
+                    dados_usuario = get_user_data()
+                    risks = dados_usuario.get('risks_salvos', [])
+                    
+                    novo = {
+                        'categoria': categoria,
+                        'tipo': agente,
+                        'unidade': unidade,
+                        'unidade_automatica': usar_auto,
+                        'id': f"{categoria}_{len(risks)}_{int(time.time())}"
+                    }
+                    
+                    risks.append(novo)
+                    save_user_data({'risks_salvos': risks})
+                    st.success("✅ Adicionado!")
                     time.sleep(1)
                     st.rerun()
-    
-    # Busca rápida de riscos
-    with st.expander("🔍 Busca Rápida de Riscos", expanded=False):
-        search_term = st.text_input("🔎 Digite para buscar riscos", placeholder="Ex: ruído, vibração, VDVR, AREN...")
-        
-        if search_term:
-            search_results = []
-            for categoria, riscos in RISCOS_PGR.items():
-                for risco in riscos:
-                    if search_term.lower() in risco.lower():
-                        search_results.append({
-                            'categoria': categoria,
-                            'risco': risco
-                        })
-            
-            if search_results:
-                st.success(f"✅ Encontrados **{len(search_results)}** resultados:")
-                
-                for result in search_results[:10]:  # Mostrar até 10 resultados
-                    categoria_display = CATEGORIAS_RISCO.get(result['categoria'], result['categoria'].title())
-                    unidade_auto = obter_unidade_automatica(result['risco'])
-                    
-                    col1, col2 = st.columns([4, 1])
-                    with col1:
-                        unidade_badge = ""
-                        if unidade_auto != "Não aplicável":
-                            unidade_badge = f'<span class="unit-auto-badge">{unidade_auto}</span>'
-                        
-                        st.markdown(f"""
-                        <div style="background: var(--card-background); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; margin: 0.25rem 0;">
-                            <div style="font-weight: 600; color: var(--text-primary);">{categoria_display}</div>
-                            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
-                                {result['risco']} {unidade_badge}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with col2:
-                        if st.button("➕", key=f"add_search_{result['categoria']}_{result['risco'][:20]}", help="Adicionar este risco"):
-                            dados_usuario = get_user_data()
-                            risks_salvos = dados_usuario.get('risks_salvos', [])
-                            
-                            novo_risco = {
-                                'categoria': result['categoria'],
-                                'tipo': result['risco'],
-                                'unidade': unidade_auto,
-                                'unidade_automatica': unidade_auto != "Não aplicável",
-                                'id': f"{result['categoria']}_{len(risks_salvos)}"
-                            }
-                            
-                            risks_salvos.append(novo_risco)
-                            save_user_data({'risks_salvos': risks_salvos})
-                            
-                            if unidade_auto != "Não aplicável":
-                                st.success(f"✅ Risco adicionado com unidade automática **{unidade_auto}**: {result['risco']}")
-                            else:
-                                st.success(f"✅ Risco adicionado: {result['risco']}")
-                            time.sleep(1)
-                            st.rerun()
-                
-                if len(search_results) > 10:
-                    st.info(f"... e mais {len(search_results) - 10} resultados. Refine sua busca para ver mais opções.")
-            else:
-                st.warning("❌ Nenhum risco encontrado com esse termo.")
-    
-    # Exibir riscos salvos com visualização aprimorada
-    dados_usuario = get_user_data()
-    risks_salvos = dados_usuario.get('risks_salvos', [])
-    
-    if risks_salvos:
-        create_risk_summary_card(risks_salvos)
-    else:
-        st.markdown("""
-        <div class="custom-alert alert-info">
-            <strong>ℹ️ Nenhum risco cadastrado</strong><br>
-            Use o formulário acima para adicionar riscos ao sistema. 
-            A base possui <strong>142 riscos</strong> categorizados do PGR para sua seleção.
-            <br><br>
-            🎨 <strong>Novo:</strong> Sistema de visualização aprimorado com 3 modos diferentes!
-        </div>
-        """, unsafe_allow_html=True)
 
-def show_os_generation():
-    """Interface de geração de OS melhorada"""
-    st.markdown('<div class="section-header">📄 Geração de OS</div>', unsafe_allow_html=True)
+def show_os_generation_advanced():
+    """Geração de OS com recursos aprimorados"""
+    st.markdown('<div class="section-header">📄 Geração Avançada de OS</div>', unsafe_allow_html=True)
     
     dados_usuario = get_user_data()
-    creditos = dados_usuario.get('creditos', 0)
     risks_salvos = dados_usuario.get('risks_salvos', [])
-    
-    # Verificar pré-requisitos
-    if creditos <= 0:
-        st.markdown("""
-        <div class="custom-alert alert-warning">
-            <strong>⚠️ Créditos insuficientes</strong><br>
-            Você precisa de créditos para gerar OS. Acesse a aba "Créditos" para adquirir.
-            <br><br>
-            💡 <strong>Modo Demo:</strong> Funcionalidade disponível apenas para demonstração.
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Adicionar alguns créditos demo
-        if st.button("🎁 Adicionar 10 Créditos Demo", type="primary"):
-            save_user_data({'creditos': 10})
-            st.success("✅ Créditos demo adicionados!")
-            time.sleep(1)
-            st.rerun()
-        return
     
     if not risks_salvos:
         st.markdown("""
-        <div class="custom-alert alert-warning">
-            <strong>⚠️ Nenhum risco cadastrado</strong><br>
-            Você precisa cadastrar riscos antes de gerar OS. Acesse a aba "Gestão de Riscos".
-            <br><br>
-            💡 <strong>Dica:</strong> A base contém 142 riscos categorizados do PGR para sua seleção.
-            🎨 <strong>Novo:</strong> Visualização aprimorada com múltiplos modos de exibição!
+        <div class="alert alert-warning">
+            <strong>⚠️ Adicione riscos primeiro</strong><br>
+            Vá para "Gestão de Riscos" e cadastre pelo menos um risco.
         </div>
         """, unsafe_allow_html=True)
         return
     
-    # Formulário de geração
+    st.markdown("### 📂 Upload de Arquivos")
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📂 Arquivos Necessários")
-        
+        st.markdown("#### 📄 Template DOCX")
         template_file = st.file_uploader(
-            "📄 Modelo Word (.docx)",
+            "Template com placeholders",
             type=['docx'],
-            help="Upload do template da OS em formato Word"
+            help="Use placeholders como {{NOME}}, {{CARGO}}, {{RISCOS}}, etc.",
+            key="template_upload"
         )
         
+        if template_file:
+            st.success(f"✅ {template_file.name}")
+    
+    with col2:
+        st.markdown("#### 📊 Planilha XLSX")
         excel_file = st.file_uploader(
-            "📊 Planilha de Funcionários (.xlsx)",
+            "Dados dos funcionários",
             type=['xlsx'],
-            help="Planilha com dados dos funcionários"
+            help="Colunas: Nome, Cargo, Setor, Matricula",
+            key="excel_upload"
+        )
+        
+        if excel_file:
+            st.success(f"✅ {excel_file.name}")
+            try:
+                df_preview = pd.read_excel(excel_file)
+                st.dataframe(df_preview.head(3), use_container_width=True)
+                st.info(f"📊 {len(df_preview)} funcionários")
+            except Exception as e:
+                st.error(f"Erro: {e}")
+    
+    # Placeholders disponíveis
+    with st.expander("🏷️ Placeholders Disponíveis", expanded=False):
+        st.markdown("""
+        **Dados Pessoais:**
+        - `{{NOME}}` - Nome do funcionário
+        - `{{CARGO}}` - Cargo/função
+        - `{{SETOR}}` - Departamento
+        - `{{MATRICULA}}` - Número de matrícula
+        
+        **Datas:**
+        - `{{DATA}}` - Data atual (DD/MM/YYYY)
+        - `{{DATA_COMPLETA}}` - Data por extenso
+        - `{{HORA}}` - Horário atual
+        - `{{MES}}` - Mês atual
+        - `{{ANO}}` - Ano atual
+        
+        **Riscos:**
+        - `{{RISCOS}}` - Lista simples de riscos
+        - `{{RISCOS_DETALHADOS}}` - Riscos por categoria
+        - `{{RISCOS_TABELA}}` - Tabela formatada (substitui por tabela real)
+        - `{{TOTAL_RISCOS}}` - Quantidade de riscos
+        - `{{TOTAL_CATEGORIAS}}` - Quantidade de categorias
+        - `{{RISCOS_AUTOMATICOS}}` - Riscos com unidade automática
+        - `{{RISCOS_MANUAIS}}` - Riscos com unidade manual
+        
+        **Sistema:**
+        - `{{USUARIO}}` - Nome do usuário do sistema
+        - `{{EMAIL_USUARIO}}` - Email do usuário
+        - `{{VERSAO_SISTEMA}}` - Versão atual
+        - `{{ID_GERACAO}}` - ID único da geração
+        """)
+    
+    # Botão de geração
+    if template_file and excel_file:
+        st.markdown("### 🚀 Gerar OS e Relatório")
+        
+        if st.button("📄 Gerar Tudo", type="primary", use_container_width=True):
+            with st.spinner("Processando..."):
+                progress = st.progress(0)
+                status = st.empty()
+                
+                for i in range(100):
+                    time.sleep(0.02)
+                    progress.progress(i + 1)
+                    if i < 30:
+                        status.text("📄 Processando template...")
+                    elif i < 60:
+                        status.text("📊 Lendo funcionários...")
+                    elif i < 80:
+                        status.text("⚠️ Inserindo riscos...")
+                    else:
+                        status.text("📋 Gerando relatório...")
+                
+                try:
+                    # Gerar documentos
+                    zip_result, historico = gerar_documentos_os_avancados(
+                        template_file, excel_file, risks_salvos
+                    )
+                    
+                    if zip_result and historico:
+                        # Gerar relatório
+                        relatorio = gerar_relatorio_os(historico, risks_salvos)
+                        
+                        # Atualizar dados
+                        dados_usuario = get_user_data()
+                        historico_completo = dados_usuario.get('historico_os', [])
+                        historico_completo.extend(historico)
+                        
+                        save_user_data({
+                            'creditos': max(0, dados_usuario.get('creditos', 10) - 1),
+                            'os_geradas_total': dados_usuario.get('os_geradas_total', 0) + len(historico),
+                            'ultimo_uso': datetime.now().strftime("%d/%m/%Y"),
+                            'historico_os': historico_completo
+                        })
+                        
+                        st.success("✅ Geração concluída!")
+                        st.balloons()
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.download_button(
+                                "📥 Baixar OS (ZIP)",
+                                data=zip_result,
+                                file_name=f"OS_Lote_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+                        
+                        with col2:
+                            if relatorio:
+                                st.download_button(
+                                    "📊 Baixar Relatório",
+                                    data=relatorio,
+                                    file_name=f"Relatorio_OS_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    use_container_width=True
+                                )
+                        
+                        st.info(f"📄 {len(historico)} OS geradas • 📊 1 Relatório criado")
+                    
+                except Exception as e:
+                    st.error(f"❌ Erro: {e}")
+                
+                status.empty()
+                progress.empty()
+
+def show_reports_page():
+    """NOVA PÁGINA - Relatórios e Histórico"""
+    st.markdown('<div class="section-header">📊 Relatórios e Histórico</div>', unsafe_allow_html=True)
+    
+    dados_usuario = get_user_data()
+    historico_os = dados_usuario.get('historico_os', [])
+    
+    if not historico_os:
+        st.markdown("""
+        <div class="alert alert-info">
+            <strong>📊 Nenhum relatório disponível</strong><br>
+            Gere suas primeiras OS na aba "Gerar OS" para ver os relatórios aqui.
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Estatísticas gerais
+    st.markdown("### 📈 Estatísticas Gerais")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        create_metric_card("Total OS", len(historico_os), "Geradas")
+    
+    with col2:
+        funcionarios_unicos = len(set(item['funcionario'] for item in historico_os))
+        create_metric_card("Funcionários", funcionarios_unicos, "Diferentes")
+    
+    with col3:
+        setores_unicos = len(set(item['setor'] for item in historico_os))
+        create_metric_card("Setores", setores_unicos, "Diferentes")
+    
+    with col4:
+        riscos_auto_total = sum(item.get('riscos_automaticos', 0) for item in historico_os)
+        create_metric_card("Auto Detecções", riscos_auto_total, "VDVR/AREN/etc")
+    
+    # Histórico detalhado
+    st.markdown("### 📋 Histórico Detalhado")
+    
+    # Filtros
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        setores_disponiveis = sorted(set(item['setor'] for item in historico_os))
+        setor_filtro = st.selectbox(
+            "🏢 Filtrar por Setor", 
+            ["Todos"] + setores_disponiveis,
+            key="setor_filtro"
         )
     
     with col2:
-        st.markdown("### ⚙️ Configurações")
-        
-        create_metric_card("Créditos Disponíveis", creditos, help_text="Cada OS gasta 1 crédito")
-        create_metric_card("Riscos Cadastrados", len(risks_salvos), help_text="Serão incluídos nas OS")
-        
-        # Mostrar informação sobre unidades automáticas
-        unidades_auto = sum(1 for risk in risks_salvos if risk.get('unidade_automatica', False))
-        if unidades_auto > 0:
-            st.success(f"🤖 {unidades_auto} risco(s) com unidade automática detectada!")
-        
-        if template_file and excel_file:
-            if st.button("🚀 Gerar OS (Demo)", use_container_width=True, type="primary"):
-                with st.spinner("Processando OS..."):
-                    # Simulação do processo
-                    progress_bar = st.progress(0)
-                    for i in range(100):
-                        time.sleep(0.01)
-                        progress_bar.progress(i + 1)
-                    
-                    # Decrementar créditos
-                    novo_credito = max(0, creditos - 1)
-                    save_user_data({
-                        'creditos': novo_credito,
-                        'os_geradas_total': dados_usuario.get('os_geradas_total', 0) + 1,
-                        'ultimo_uso': time.strftime("%d/%m/%Y")
-                    })
-                    
-                    st.success("✅ OS geradas com sucesso!")
-                    st.balloons()
-                    time.sleep(2)
-                    st.rerun()
-
-def show_credits_management():
-    """Interface de gerenciamento de créditos"""
-    st.markdown('<div class="section-header">💰 Gerenciamento de Créditos</div>', unsafe_allow_html=True)
+        data_inicio = st.date_input(
+            "📅 Data Inicial",
+            value=datetime.now() - timedelta(days=30),
+            key="data_inicio"
+        )
     
-    dados_usuario = get_user_data()
-    creditos = dados_usuario.get('creditos', 0)
+    with col3:
+        data_fim = st.date_input(
+            "📅 Data Final",
+            value=datetime.now(),
+            key="data_fim"
+        )
     
-    # Status atual
-    create_metric_card("Saldo Atual", creditos, help_text="Créditos disponíveis")
+    # Filtrar dados
+    historico_filtrado = historico_os
     
-    # Pacotes de créditos
-    st.markdown("### 🛒 Pacotes Disponíveis (Demo)")
+    if setor_filtro != "Todos":
+        historico_filtrado = [item for item in historico_filtrado if item['setor'] == setor_filtro]
     
-    col1, col2, col3 = st.columns(3)
-    
-    pacotes = [
-        {"nome": "Básico", "creditos": 10, "preco": 50.00, "economia": 0},
-        {"nome": "Profissional", "creditos": 25, "preco": 100.00, "economia": 25},
-        {"nome": "Empresarial", "creditos": 50, "preco": 180.00, "economia": 70}
+    historico_filtrado = [
+        item for item in historico_filtrado 
+        if data_inicio <= datetime.fromisoformat(item['data_geracao']).date() <= data_fim
     ]
     
-    for idx, pacote in enumerate(pacotes):
-        with [col1, col2, col3][idx]:
-            economia_html = ""
-            if pacote["economia"] > 0:
-                economia_html = f'<div style="color: var(--success-color); font-weight: 600; margin-top: 0.5rem;">💰 Economia: R$ {pacote["economia"]:.2f}</div>'
+    # Mostrar dados filtrados
+    if historico_filtrado:
+        st.info(f"📊 Mostrando {len(historico_filtrado)} de {len(historico_os)} registros")
+        
+        # Converter para DataFrame para exibição
+        df_historico = pd.DataFrame(historico_filtrado)
+        df_historico['Data/Hora'] = pd.to_datetime(df_historico['data_geracao']).dt.strftime('%d/%m/%Y %H:%M')
+        
+        # Reordenar colunas
+        colunas_display = ['Data/Hora', 'funcionario', 'cargo', 'setor', 'total_riscos', 'riscos_automaticos', 'id_geracao']
+        df_display = df_historico[colunas_display].copy()
+        df_display.columns = ['Data/Hora', 'Funcionário', 'Cargo', 'Setor', 'Riscos', 'Auto', 'ID']
+        
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        
+        # Análises adicionais
+        with st.expander("📊 Análises Adicionais", expanded=False):
+            col1, col2 = st.columns(2)
             
+            with col1:
+                st.markdown("**📈 OS por Setor:**")
+                setor_count = df_historico['setor'].value_counts()
+                for setor, count in setor_count.items():
+                    st.write(f"• {setor}: {count} OS")
+            
+            with col2:
+                st.markdown("**🤖 Detecções Automáticas:**")
+                total_riscos = df_historico['total_riscos'].sum()
+                total_auto = df_historico['riscos_automaticos'].sum()
+                if total_riscos > 0:
+                    pct_auto = (total_auto / total_riscos) * 100
+                    st.metric("% Automático", f"{pct_auto:.1f}%", f"{total_auto}/{total_riscos}")
+        
+        # Botão para gerar relatório consolidado
+        if st.button("📋 Gerar Relatório Consolidado", use_container_width=True):
+            with st.spinner("Gerando relatório consolidado..."):
+                # Aqui você pode implementar um relatório mais abrangente
+                st.success("🎯 Funcionalidade de relatório consolidado pode ser expandida!")
+    
+    else:
+        st.warning("❌ Nenhum registro encontrado com os filtros aplicados.")
+
+def show_credits_management():
+    st.markdown('<div class="section-header">💰 Créditos</div>', unsafe_allow_html=True)
+    
+    dados_usuario = get_user_data()
+    creditos = dados_usuario.get('creditos', 10)
+    
+    create_metric_card("Saldo", creditos, "Disponíveis")
+    
+    col1, col2, col3 = st.columns(3)
+    pacotes = [
+        {"nome": "Básico", "creditos": 10, "preco": 50.00},
+        {"nome": "Pro", "creditos": 25, "preco": 100.00},
+        {"nome": "Premium", "creditos": 50, "preco": 180.00}
+    ]
+    
+    for idx, pac in enumerate(pacotes):
+        with [col1, col2, col3][idx]:
             st.markdown(f"""
             <div class="metric-card" style="text-align: center;">
                 <div style="font-size: 1.5rem; margin-bottom: 1rem;">📦</div>
-                <div style="font-weight: 700; color: var(--text-primary); font-size: 1.25rem;">{pacote["nome"]}</div>
-                <div style="color: var(--text-secondary); margin: 0.5rem 0;">{pacote["creditos"]} créditos</div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color);">R$ {pacote["preco"]:.2f}</div>
-                {economia_html}
+                <div style="font-weight: 700; font-size: 1.2rem;">{pac["nome"]}</div>
+                <div style="margin: 0.5rem 0;">{pac["creditos"]} créditos</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color);">
+                    R$ {pac["preco"]:.2f}
+                </div>
             </div>
             """, unsafe_allow_html=True)
             
-            if st.button(f"🛒 Simular {pacote['nome']}", key=f"buy_{idx}", use_container_width=True):
-                novo_total = creditos + pacote["creditos"]
+            if st.button(f"🛒 {pac['nome']}", key=f"comprar_{idx}", use_container_width=True):
+                novo_total = creditos + pac["creditos"]
                 save_user_data({'creditos': novo_total})
-                st.success(f"✅ {pacote['creditos']} créditos adicionados! Total: {novo_total}")
+                st.success(f"✅ +{pac['creditos']} créditos!")
                 time.sleep(1)
                 st.rerun()
 
-# --- EXECUÇÃO PRINCIPAL ---
+# --- Main ---
 def main():
-    """Função principal da aplicação"""
-    
-    # Verificar autenticação
     if not is_authenticated():
         show_login_page()
     else:
