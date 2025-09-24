@@ -1,1096 +1,632 @@
-# 🔐 Sistema Gerador de OS - VERSÃO COMPLETA COM RELATÓRIOS
-# Preenchimento automático de DOCX + Relatório detalhado das OS geradas
-# Desenvolvido por especialista em UX/UI - Setembro 2025
-
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.shared import OxmlElement, qn
-from docx.oxml.ns import nsdecls
-from docx.oxml import parse_xml
 import zipfile
 from io import BytesIO
 import time
 import re
 import sys
 import os
-import json
-from datetime import datetime, timedelta
-import uuid
 
 # Adicionar o diretório atual ao path para importar módulos locais
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Tentativa de importar módulos locais com fallback
-try:
-    from database.models import DatabaseManager
-    from database.auth import AuthManager
-    from database.user_data import UserDataManager
-    USE_LOCAL_DB = True
-except ImportError:
-    USE_LOCAL_DB = False
+from database.models import DatabaseManager
+from database.auth import AuthManager
+from database.user_data import UserDataManager
 
 # --- Configuração da Página ---
 st.set_page_config(
     page_title="Gerador de Ordens de Serviço (OS)",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded"
 )
 
-# === CONSTANTES GLOBAIS ATUALIZADAS ===
-UNIDADES_DE_MEDIDA = [
-    "dB(A)", "m/s²", "m/s¹⁷⁵", "ppm", "mg/m³", "%", "°C", "lx", 
-    "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"
-]
-
-# === MAPEAMENTO AUTOMÁTICO DE UNIDADES ===
-UNIDADES_AUTOMATICAS = {
-    # Vibração - NOVOS VDVR e AREN
-    "Vibração de Corpo Inteiro (AREN)": "m/s²",
-    "Vibração de Corpo Inteiro (VDVR)": "m/s¹⁷⁵",
-    "Vibrações Localizadas (mão/braço)": "m/s²",
-    "Vibração de Mãos e Braços": "m/s²",
-    "Vibração de Corpo Inteiro": "m/s²",
-    
-    # Ruído
-    "Exposição ao Ruído": "dB(A)",
-    "Ruído (Contínuo ou Intermitente)": "dB(A)",
-    "Ruído (Impacto)": "dB(A)",
-    
-    # Temperatura
-    "Ambiente Artificialmente Frio": "°C",
-    "Exposição à Temperatura Ambiente Baixa": "°C",
-    "Exposição à Temperatura Ambiente Elevada": "°C",
-    "Calor": "°C",
-    "Frio": "°C",
-    
-    # Químicos
-    "Exposição a Produto Químico": "ppm",
-    "Produtos Químicos em Geral": "ppm",
-    "Poeiras": "mg/m³",
-    "Fumos": "mg/m³",
-    "Névoas": "mg/m³",
-    "Neblinas": "mg/m³",
-    "Gases": "ppm",
-    "Vapores": "ppm",
-    
-    # Outros
-    "Exposição à Radiações Ionizantes": "µT",
-    "Exposição à Radiações Não-ionizantes": "µT",
-    "Radiações Ionizantes": "µT",
-    "Radiações Não-Ionizantes": "µT",
-    "Pressão Atmosférica Anormal": "kV/m",
-    "Pressões Anormais": "kV/m",
-    "Iluminação inadequada": "lx",
-}
-
-# === BASE DE RISCOS EXPANDIDA ===
-AGENTES_DE_RISCO_ORIGINAL = sorted([
+# --- DEFINIÇÃO DE CONSTANTES GLOBAIS ---
+UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
+AGENTES_DE_RISCO = sorted([
     "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
     "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
     "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias", 
     "Protozoários", "Fungos", "Parasitas", "Bacilos"
 ])
-
-NOVOS_RISCOS = [
-    "Vibração de Corpo Inteiro (AREN)",
-    "Vibração de Corpo Inteiro (VDVR)", 
-    "Exposição ao Ruído",
-    "Ambiente Artificialmente Frio",
-    "Exposição à Temperatura Ambiente Baixa",
-    "Exposição à Temperatura Ambiente Elevada",
-    "Pressão Atmosférica Anormal (condições hiperbáricas)",
-    "Vibrações Localizadas (mão/braço)",
-    "Vibrações Localizadas em partes do corpo",
-    "Exposição a Produto Químico",
-    "Água e/ou alimentos contaminados",
-    "Contaminação pelo Corona Vírus", 
-    "Contato com Fluido Orgânico (sangue, hemoderivados, secreções, excreções)",
-    "Contato com Pessoas Doentes e/ou Material Infectocontagiante",
-    "Exposição à Agentes Microbiológicos (fungos, bactérias, vírus, protozoários, parasitas)"
-]
-
-AGENTES_DE_RISCO = sorted(list(set(AGENTES_DE_RISCO_ORIGINAL + NOVOS_RISCOS)))
-
-CATEGORIAS_RISCO = {
-    'fisico': '🔥 Físicos', 
-    'quimico': '⚗️ Químicos', 
-    'biologico': '🦠 Biológicos', 
-    'ergonomico': '🏃 Ergonômicos', 
-    'acidente': '⚠️ Acidentes'
-}
+CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
 
 # --- Inicialização dos Gerenciadores ---
 @st.cache_resource
 def init_managers():
-    if USE_LOCAL_DB:
-        try:
-            db_manager = DatabaseManager()
-            auth_manager = AuthManager(db_manager)  
-            user_data_manager = UserDataManager(db_manager)
-            return db_manager, auth_manager, user_data_manager
-        except:
-            return None, None, None
-    return None, None, None
+    db_manager = DatabaseManager()
+    auth_manager = AuthManager(db_manager)
+    user_data_manager = UserDataManager(db_manager)
+    return db_manager, auth_manager, user_data_manager
 
-if USE_LOCAL_DB:
-    db_manager, auth_manager, user_data_manager = init_managers()
-else:
-    db_manager, auth_manager, user_data_manager = None, None, None
+db_manager, auth_manager, user_data_manager = init_managers()
 
-# --- Funções Auxiliares ---
-def obter_unidade_automatica(agente_risco):
-    return UNIDADES_AUTOMATICAS.get(agente_risco, "Não aplicável")
-
-def get_user_data():
-    return st.session_state.get('user_data', {
-        'risks_salvos': [],
-        'creditos': 10,
-        'os_geradas_total': 0,
-        'ultimo_uso': 'Nunca',
-        'historico_os': []  # Novo campo para histórico
-    })
-
-def save_user_data(data):
-    if 'user_data' not in st.session_state:
-        st.session_state.user_data = {}
-    st.session_state.user_data.update(data)
-    
-    if USE_LOCAL_DB and user_data_manager:
-        try:
-            user_data_manager.save_user_data(data)
-        except:
-            pass
-
-def is_authenticated():
-    return st.session_state.get("authenticated", False)
-
-def get_current_user():
-    return st.session_state.get("user_info", {
-        'nome': 'Usuário Demo',
-        'email': 'demo@gerador-os.com'
-    })
-
-# === FUNÇÕES APRIMORADAS DE PROCESSAMENTO DOCX ===
-
-def replace_placeholders_advanced(doc, replacements):
-    """Substitui placeholders no documento Word com suporte avançado"""
-    # Substituir em parágrafos
-    for paragraph in doc.paragraphs:
-        for key, value in replacements.items():
-            if key in paragraph.text:
-                # Preservar formatação original
-                for run in paragraph.runs:
-                    if key in run.text:
-                        run.text = run.text.replace(key, str(value))
-                paragraph.text = paragraph.text.replace(key, str(value))
-    
-    # Substituir em tabelas
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    for key, value in replacements.items():
-                        if key in paragraph.text:
-                            paragraph.text = paragraph.text.replace(key, str(value))
-    
-    # Substituir em cabeçalhos e rodapés
-    for section in doc.sections:
-        # Cabeçalho
-        header = section.header
-        for paragraph in header.paragraphs:
-            for key, value in replacements.items():
-                if key in paragraph.text:
-                    paragraph.text = paragraph.text.replace(key, str(value))
-        
-        # Rodapé
-        footer = section.footer
-        for paragraph in footer.paragraphs:
-            for key, value in replacements.items():
-                if key in paragraph.text:
-                    paragraph.text = paragraph.text.replace(key, str(value))
-
-def add_risk_table_to_doc(doc, risks_salvos):
-    """Adiciona uma tabela formatada com os riscos ao documento"""
-    if not risks_salvos:
-        return
-    
-    # Encontrar posição para inserir tabela (após {{RISCOS_TABELA}})
-    target_paragraph = None
-    for paragraph in doc.paragraphs:
-        if "{{RISCOS_TABELA}}" in paragraph.text:
-            target_paragraph = paragraph
-            break
-    
-    if target_paragraph:
-        # Limpar o placeholder
-        target_paragraph.text = target_paragraph.text.replace("{{RISCOS_TABELA}}", "")
-        
-        # Criar tabela
-        table = doc.add_table(rows=1, cols=4)
-        table.style = 'Table Grid'
-        
-        # Cabeçalho da tabela
-        header_cells = table.rows[0].cells
-        header_cells[0].text = 'Categoria'
-        header_cells[1].text = 'Tipo de Risco'
-        header_cells[2].text = 'Unidade'
-        header_cells[3].text = 'Automático'
-        
-        # Formatar cabeçalho
-        for cell in header_cells:
-            cell.paragraphs[0].runs[0].bold = True
-            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Adicionar dados dos riscos
-        for risk in risks_salvos:
-            row_cells = table.add_row().cells
-            row_cells[0].text = CATEGORIAS_RISCO.get(risk.get('categoria', ''), 'N/A')
-            row_cells[1].text = risk.get('tipo', 'N/A')
-            row_cells[2].text = risk.get('unidade', 'N/A')
-            row_cells[3].text = 'Sim' if risk.get('unidade_automatica', False) else 'Não'
-
-def processar_planilha_avancada(excel_file):
-    """Processa planilha com validação avançada"""
-    try:
-        df = pd.read_excel(excel_file)
-        
-        # Normalizar nomes das colunas
-        df.columns = df.columns.str.strip().str.title()
-        
-        # Mapear colunas comuns
-        column_mapping = {
-            'Name': 'Nome',
-            'Employee': 'Nome',
-            'Funcionario': 'Nome',
-            'Position': 'Cargo',
-            'Job': 'Cargo',
-            'Function': 'Cargo',
-            'Department': 'Setor',
-            'Departamento': 'Setor',
-            'Area': 'Setor',
-            'Id': 'Matricula',
-            'Employee_Id': 'Matricula',
-            'Registration': 'Matricula'
-        }
-        
-        # Aplicar mapeamento
-        for old_col, new_col in column_mapping.items():
-            if old_col in df.columns:
-                df.rename(columns={old_col: new_col}, inplace=True)
-        
-        # Validar colunas obrigatórias
-        required_columns = ['Nome']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        
-        if missing_columns:
-            st.warning(f"Colunas obrigatórias não encontradas: {missing_columns}")
-        
-        # Preencher valores em branco
-        df.fillna({
-            'Nome': 'Nome não informado',
-            'Cargo': 'Cargo não informado',
-            'Setor': 'Setor não informado',
-            'Matricula': 'N/A'
-        }, inplace=True)
-        
-        return df.to_dict('records')
-        
-    except Exception as e:
-        st.error(f"Erro ao processar planilha: {e}")
-        return []
-
-def gerar_documentos_os_avancados(template_file, excel_file, risks_salvos):
-    """Gera documentos de OS com recursos avançados e histórico"""
-    try:
-        funcionarios = processar_planilha_avancada(excel_file)
-        if not funcionarios:
-            return None, None
-        
-        zip_buffer = BytesIO()
-        historico_geracao = []
-        
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            for idx, funcionario in enumerate(funcionarios):
-                doc = Document(template_file)
-                
-                # Preparar texto dos riscos
-                riscos_texto = "\n".join([
-                    f"• {risk.get('tipo', 'N/A')} ({CATEGORIAS_RISCO.get(risk.get('categoria', ''), 'N/A')}) - {risk.get('unidade', 'N/A')}"
-                    for risk in risks_salvos
-                ])
-                
-                # Separar riscos por categoria para relatório
-                riscos_por_categoria = {}
-                for risk in risks_salvos:
-                    categoria = risk.get('categoria', 'outros')
-                    if categoria not in riscos_por_categoria:
-                        riscos_por_categoria[categoria] = []
-                    riscos_por_categoria[categoria].append(risk)
-                
-                # Criar texto detalhado por categoria
-                riscos_detalhados = ""
-                for categoria, riscos in riscos_por_categoria.items():
-                    categoria_nome = CATEGORIAS_RISCO.get(categoria, categoria.title())
-                    riscos_detalhados += f"\n{categoria_nome}:\n"
-                    for risk in riscos:
-                        auto_badge = " (Automático)" if risk.get('unidade_automatica', False) else ""
-                        riscos_detalhados += f"  • {risk.get('tipo', 'N/A')} - {risk.get('unidade', 'N/A')}{auto_badge}\n"
-                
-                # Placeholders expandidos
-                data_atual = datetime.now()
-                replacements = {
-                    # Dados básicos
-                    '{{NOME}}': funcionario.get('Nome', 'Nome não informado'),
-                    '{{CARGO}}': funcionario.get('Cargo', 'Cargo não informado'),
-                    '{{SETOR}}': funcionario.get('Setor', 'Setor não informado'),
-                    '{{MATRICULA}}': str(funcionario.get('Matricula', 'N/A')),
-                    
-                    # Datas
-                    '{{DATA}}': data_atual.strftime("%d/%m/%Y"),
-                    '{{DATA_COMPLETA}}': data_atual.strftime("%d de %B de %Y"),
-                    '{{HORA}}': data_atual.strftime("%H:%M"),
-                    '{{MES}}': data_atual.strftime("%B"),
-                    '{{ANO}}': data_atual.strftime("%Y"),
-                    
-                    # Riscos
-                    '{{RISCOS}}': riscos_texto,
-                    '{{RISCOS_DETALHADOS}}': riscos_detalhados,
-                    '{{TOTAL_RISCOS}}': str(len(risks_salvos)),
-                    '{{TOTAL_CATEGORIAS}}': str(len(riscos_por_categoria)),
-                    
-                    # Estatísticas
-                    '{{RISCOS_AUTOMATICOS}}': str(sum(1 for r in risks_salvos if r.get('unidade_automatica', False))),
-                    '{{RISCOS_MANUAIS}}': str(sum(1 for r in risks_salvos if not r.get('unidade_automatica', False))),
-                    
-                    # Informações do sistema
-                    '{{USUARIO}}': get_current_user().get('nome', 'Sistema'),
-                    '{{EMAIL_USUARIO}}': get_current_user().get('email', 'sistema@os.com'),
-                    '{{VERSAO_SISTEMA}}': "3.1",
-                    '{{ID_GERACAO}}': str(uuid.uuid4())[:8].upper()
-                }
-                
-                # Substituir placeholders
-                replace_placeholders_advanced(doc, replacements)
-                
-                # Adicionar tabela de riscos se solicitada
-                add_risk_table_to_doc(doc, risks_salvos)
-                
-                # Salvar documento no ZIP
-                doc_buffer = BytesIO()
-                doc.save(doc_buffer)
-                doc_buffer.seek(0)
-                
-                nome_limpo = re.sub(r'[^\w\s-]', '', funcionario.get('Nome', f'Funcionario_{idx+1}')).replace(' ', '_')
-                nome_arquivo = f"OS_{nome_limpo}_{data_atual.strftime('%Y%m%d')}.docx"
-                zip_file.writestr(nome_arquivo, doc_buffer.read())
-                
-                # Registrar no histórico
-                historico_item = {
-                    'funcionario': funcionario.get('Nome', 'N/A'),
-                    'cargo': funcionario.get('Cargo', 'N/A'),
-                    'setor': funcionario.get('Setor', 'N/A'),
-                    'matricula': str(funcionario.get('Matricula', 'N/A')),
-                    'total_riscos': len(risks_salvos),
-                    'riscos_automaticos': sum(1 for r in risks_salvos if r.get('unidade_automatica', False)),
-                    'data_geracao': data_atual.isoformat(),
-                    'arquivo': nome_arquivo,
-                    'id_geracao': replacements['{{ID_GERACAO}}']
-                }
-                historico_geracao.append(historico_item)
-        
-        zip_buffer.seek(0)
-        return zip_buffer, historico_geracao
-        
-    except Exception as e:
-        st.error(f"Erro ao gerar documentos: {e}")
-        return None, None
-
-def gerar_relatorio_os(historico_geracao, risks_salvos):
-    """Gera relatório detalhado das OS geradas"""
-    if not historico_geracao:
-        return None
-    
-    # Criar documento do relatório
-    doc = Document()
-    
-    # Título
-    titulo = doc.add_heading('RELATÓRIO DE ORDENS DE SERVIÇO GERADAS', 0)
-    titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # Informações gerais
-    doc.add_heading('1. RESUMO EXECUTIVO', level=1)
-    
-    data_geracao = datetime.now()
-    info_geral = doc.add_paragraph()
-    info_geral.add_run(f"Data de Geração: ").bold = True
-    info_geral.add_run(f"{data_geracao.strftime('%d/%m/%Y às %H:%M')}\n")
-    info_geral.add_run(f"Total de OS Geradas: ").bold = True
-    info_geral.add_run(f"{len(historico_geracao)}\n")
-    info_geral.add_run(f"Total de Riscos Avaliados: ").bold = True
-    info_geral.add_run(f"{len(risks_salvos)}\n")
-    info_geral.add_run(f"Riscos com Unidade Automática: ").bold = True
-    info_geral.add_run(f"{sum(1 for r in risks_salvos if r.get('unidade_automatica', False))}\n")
-    
-    # Estatísticas por setor
-    doc.add_heading('2. DISTRIBUIÇÃO POR SETOR', level=1)
-    
-    setores = {}
-    for item in historico_geracao:
-        setor = item['setor']
-        if setor not in setores:
-            setores[setor] = 0
-        setores[setor] += 1
-    
-    for setor, count in sorted(setores.items()):
-        p = doc.add_paragraph()
-        p.add_run(f"• {setor}: ").bold = True
-        p.add_run(f"{count} funcionário(s)")
-    
-    # Lista detalhada de riscos
-    doc.add_heading('3. RISCOS AVALIADOS', level=1)
-    
-    # Agrupar riscos por categoria
-    riscos_por_categoria = {}
-    for risk in risks_salvos:
-        categoria = risk.get('categoria', 'outros')
-        if categoria not in riscos_por_categoria:
-            riscos_por_categoria[categoria] = []
-        riscos_por_categoria[categoria].append(risk)
-    
-    for categoria, riscos in riscos_por_categoria.items():
-        categoria_nome = CATEGORIAS_RISCO.get(categoria, categoria.title())
-        doc.add_heading(f"3.{list(riscos_por_categoria.keys()).index(categoria) + 1} {categoria_nome}", level=2)
-        
-        for risk in riscos:
-            p = doc.add_paragraph()
-            p.add_run(f"• {risk.get('tipo', 'N/A')}")
-            p.add_run(f" - Unidade: {risk.get('unidade', 'N/A')}")
-            if risk.get('unidade_automatica', False):
-                p.add_run(" (Detectado automaticamente)").italic = True
-    
-    # Tabela detalhada dos funcionários
-    doc.add_heading('4. FUNCIONÁRIOS AVALIADOS', level=1)
-    
-    # Criar tabela
-    table = doc.add_table(rows=1, cols=6)
-    table.style = 'Table Grid'
-    
-    # Cabeçalho
-    header_cells = table.rows[0].cells
-    headers = ['Nome', 'Cargo', 'Setor', 'Matrícula', 'Total Riscos', 'ID Geração']
-    for i, header in enumerate(headers):
-        header_cells[i].text = header
-        header_cells[i].paragraphs[0].runs[0].bold = True
-        header_cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # Dados
-    for item in historico_geracao:
-        row_cells = table.add_row().cells
-        row_cells[0].text = item['funcionario']
-        row_cells[1].text = item['cargo']
-        row_cells[2].text = item['setor']
-        row_cells[3].text = item['matricula']
-        row_cells[4].text = str(item['total_riscos'])
-        row_cells[5].text = item['id_geracao']
-    
-    # Rodapé
-    doc.add_page_break()
-    doc.add_heading('5. OBSERVAÇÕES', level=1)
-    obs = doc.add_paragraph()
-    obs.add_run("• Este relatório foi gerado automaticamente pelo Sistema Gerador de OS v3.1\n")
-    obs.add_run("• Todos os riscos foram avaliados conforme base de dados do PGR\n")
-    obs.add_run("• Unidades de medida automáticas: VDVR (m/s¹⁷⁵), AREN (m/s²), Ruído (dB(A)), etc.\n")
-    obs.add_run(f"• Usuário responsável: {get_current_user().get('nome', 'Sistema')}\n")
-    obs.add_run(f"• Email: {get_current_user().get('email', 'sistema@os.com')}")
-    
-    # Salvar em buffer
-    relatorio_buffer = BytesIO()
-    doc.save(relatorio_buffer)
-    relatorio_buffer.seek(0)
-    
-    return relatorio_buffer
-
-# === CSS E COMPONENTES MANTIDOS ===
+# --- CSS PERSONALIZADO ---
 st.markdown("""
 <style>
-    :root {
-        --primary-color: #1f77b4;
-        --success-color: #2ca02c;
-        --warning-color: #ff7f0e;
-        --card-background: #1e1e2e;
-        --text-primary: #ffffff;
-        --text-secondary: #b3b3b3;
-        --border-color: #3d3d3d;
-        --border-radius: 12px;
+    [data-testid="stSidebar"] {
+        display: none;
     }
-
-    .main > div { padding-top: 2rem; }
-    .stApp { background: linear-gradient(135deg, #0e1117 0%, #1a1a2e 100%); }
-
-    .metric-card {
-        background: var(--card-background);
-        padding: 1.5rem;
-        border-radius: var(--border-radius);
-        border: 1px solid var(--border-color);
-        margin-bottom: 1rem;
-        transition: transform 0.2s ease;
-    }
-    .metric-card:hover { transform: translateY(-2px); }
-
     .main-header {
-        background: linear-gradient(90deg, var(--primary-color), var(--warning-color));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.5rem;
-        font-weight: 700;
         text-align: center;
-        margin-bottom: 2rem;
+        padding-bottom: 20px;
     }
-
-    .section-header {
-        color: var(--text-primary);
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 1.5rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid var(--primary-color);
+    .auth-container {
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 2rem;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background-color: #f9f9f9;
     }
-
-    .alert {
+    .user-info {
+        background-color: #262730; 
+        color: white;            
         padding: 1rem;
-        border-radius: var(--border-radius);
-        margin: 1rem 0;
-        border-left: 4px solid;
-    }
-    .alert-info {
-        background: rgba(31, 119, 180, 0.1);
-        border-left-color: var(--primary-color);
-        color: var(--text-primary);
-    }
-    .alert-success {
-        background: rgba(44, 160, 44, 0.1);
-        border-left-color: var(--success-color);
-        color: var(--text-primary);
-    }
-    .alert-warning {
-        background: rgba(255, 127, 14, 0.1);
-        border-left-color: var(--warning-color);
-        color: var(--text-primary);
-    }
-
-    .report-card {
-        background: linear-gradient(135deg, #2c3e50, #3498db);
-        color: white;
-        padding: 1.5rem;
-        border-radius: var(--border-radius);
-        margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        border: 1px solid #3DD56D; 
     }
 </style>
 """, unsafe_allow_html=True)
 
-def create_metric_card(title, value, help_text=None):
-    help_html = ""
-    if help_text:
-        help_html = f'<div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem;">{help_text}</div>'
-    
-    st.markdown(f"""
-    <div class="metric-card">
-        <div style="color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase;">{title}</div>
-        <div style="color: var(--text-primary); font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{value}</div>
-        {help_html}
-    </div>
-    """, unsafe_allow_html=True)
 
-# === PÁGINAS MANTIDAS + NOVA ABA DE RELATÓRIOS ===
-
+# --- FUNÇÕES DE AUTENTICAÇÃO E LÓGICA DE NEGÓCIO ---
 def show_login_page():
-    st.markdown('<div class="main-header">🔐 Sistema Gerador de OS</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="alert alert-info">
-        <strong>🚀 Sistema Completo com Relatórios!</strong><br>
-        ✅ Preenchimento automático de DOCX com placeholders expandidos<br>
-        ✅ Geração de relatório detalhado das OS<br>
-        ✅ Unidades automáticas: VDVR (m/s¹⁷⁵), AREN (m/s²)<br>
-        ✅ Histórico completo de gerações<br>
-        ✅ Tabelas formatadas nos documentos
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🚀 Entrar no Sistema", use_container_width=True, type="primary"):
-            st.session_state.authenticated = True
-            st.session_state.user_info = {
-                'nome': 'Usuário Demo',
-                'email': 'demo@gerador-os.com'
-            }
-            st.success("✅ Acesso liberado!")
-            time.sleep(1)
-            st.rerun()
-
-def show_main_app():
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown('<div class="main-header">📄 Gerador de OS</div>', unsafe_allow_html=True)
-    
-    with st.sidebar:
-        user_info = get_current_user()
-        st.markdown(f"""
-        <div class="metric-card">
-            <div style="text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">👤</div>
-                <div style="font-weight: 600; color: var(--text-primary);">{user_info.get('nome')}</div>
-                <div style="color: var(--text-secondary); font-size: 0.9rem;">{user_info.get('email')}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🚪 Sair", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
-        
-        st.markdown("---")
-        st.markdown("### 📊 Sistema v3.1")
-        st.metric("Placeholders", "15+")
-        st.metric("Relatórios", "Automáticos")
-        st.metric("VDVR/AREN", "Auto")
-    
-    # TABS EXPANDIDAS COM NOVA ABA DE RELATÓRIOS
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏠 Início", 
-        "⚠️ Gestão de Riscos", 
-        "📄 Gerar OS", 
-        "📊 Relatórios",  # NOVA ABA
-        "💰 Créditos"
-    ])
-    
+    st.markdown("""<div class="main-header"><h1>🔐 Acesso ao Sistema</h1><p>Faça login ou registre-se para acessar o Gerador de OS</p></div>""", unsafe_allow_html=True)
+    tab1, tab2 = st.tabs(["Login", "Registro"])
     with tab1:
-        show_dashboard()
-    
-    with tab2:
-        show_risk_management()
-    
-    with tab3:
-        show_os_generation_advanced()  # VERSÃO APRIMORADA
-    
-    with tab4:
-        show_reports_page()  # NOVA PÁGINA
-    
-    with tab5:
-        show_credits_management()
-
-def show_dashboard():
-    st.markdown('<div class="section-header">📊 Dashboard</div>', unsafe_allow_html=True)
-    
-    dados_usuario = get_user_data()
-    risks_salvos = dados_usuario.get('risks_salvos', [])
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        create_metric_card("Riscos", len(risks_salvos), "Cadastrados")
-    with col2:
-        create_metric_card("Créditos", dados_usuario.get('creditos', 10), "Disponíveis")
-    with col3:
-        create_metric_card("OS Geradas", dados_usuario.get('os_geradas_total', 0), "Total")
-    with col4:
-        historico_os = dados_usuario.get('historico_os', [])
-        create_metric_card("Relatórios", len(historico_os), "Gerações")
-
-def show_risk_management():
-    st.markdown('<div class="section-header">⚠️ Gestão de Riscos</div>', unsafe_allow_html=True)
-    
-    with st.expander("➕ Adicionar Risco", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            categoria = st.selectbox(
-                "📂 Categoria",
-                options=list(CATEGORIAS_RISCO.keys()),
-                format_func=lambda x: CATEGORIAS_RISCO[x],
-                key="categoria_select"
-            )
-            
-            # Filtrar agentes por categoria (simplificado)
-            agentes_filtrados = [a for a in AGENTES_DE_RISCO if any(
-                term in a.lower() for term in {
-                    'fisico': ['ruído', 'vibração', 'temperatura', 'radiação', 'frio', 'calor', 'pressão'],
-                    'quimico': ['químico', 'poeira', 'fumo', 'névoa', 'gas', 'vapor'],
-                    'biologico': ['vírus', 'bactéria', 'fungo', 'água', 'corona', 'fluido'],
-                    'ergonomico': ['postur', 'esforç', 'repet', 'carg', 'iluminação'],
-                    'acidente': ['queda', 'choque', 'cortant', 'elétric', 'incênd']
-                }.get(categoria, [])
-            )]
-            
-            if not agentes_filtrados:
-                agentes_filtrados = AGENTES_DE_RISCO
-            
-            agente = st.selectbox(
-                f"🎯 Agente ({len(agentes_filtrados)} disponíveis)",
-                agentes_filtrados,
-                key="agente_select"
-            )
-        
-        with col2:
-            if agente:
-                unidade_auto = obter_unidade_automatica(agente)
-                if unidade_auto != "Não aplicável":
-                    st.success(f"🤖 **Detectado:** {unidade_auto}")
-                    usar_auto = st.checkbox("Usar automático", value=True, key="usar_auto")
-                    
-                    if usar_auto:
-                        unidade = unidade_auto
-                        if "VDVR" in agente:
-                            st.balloons()
-                            st.success("🎯 **VDVR** com m/s¹⁷⁵!")
-                        elif "AREN" in agente:
-                            st.balloons()
-                            st.success("📊 **AREN** com m/s²!")
+        with st.form("login_form"):
+            email = st.text_input("Email", placeholder="seu@email.com")
+            password = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar", use_container_width=True):
+                if email and password:
+                    success, message, session_data = auth_manager.login_user(email, password)
+                    if success:
+                        st.session_state.authenticated = True
+                        st.session_state.user_data = session_data
+                        st.session_state.user_data_loaded = False 
+                        st.success(message)
+                        st.rerun()
                     else:
-                        unidade = st.selectbox("📏 Manual", UNIDADES_DE_MEDIDA, key="unidade_manual")
+                        st.error(message)
                 else:
-                    unidade = st.selectbox("📏 Unidade", UNIDADES_DE_MEDIDA, key="unidade_select")
-                    usar_auto = False
-            
-            if st.button("✅ Adicionar", use_container_width=True):
-                if agente:
-                    dados_usuario = get_user_data()
-                    risks = dados_usuario.get('risks_salvos', [])
-                    
-                    novo = {
-                        'categoria': categoria,
-                        'tipo': agente,
-                        'unidade': unidade,
-                        'unidade_automatica': usar_auto,
-                        'id': f"{categoria}_{len(risks)}_{int(time.time())}"
-                    }
-                    
-                    risks.append(novo)
-                    save_user_data({'risks_salvos': risks})
-                    st.success("✅ Adicionado!")
-                    time.sleep(1)
-                    st.rerun()
-
-def show_os_generation_advanced():
-    """Geração de OS com recursos aprimorados"""
-    st.markdown('<div class="section-header">📄 Geração Avançada de OS</div>', unsafe_allow_html=True)
-    
-    dados_usuario = get_user_data()
-    risks_salvos = dados_usuario.get('risks_salvos', [])
-    
-    if not risks_salvos:
-        st.markdown("""
-        <div class="alert alert-warning">
-            <strong>⚠️ Adicione riscos primeiro</strong><br>
-            Vá para "Gestão de Riscos" e cadastre pelo menos um risco.
-        </div>
-        """, unsafe_allow_html=True)
-        return
-    
-    st.markdown("### 📂 Upload de Arquivos")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📄 Template DOCX")
-        template_file = st.file_uploader(
-            "Template com placeholders",
-            type=['docx'],
-            help="Use placeholders como {{NOME}}, {{CARGO}}, {{RISCOS}}, etc.",
-            key="template_upload"
-        )
-        
-        if template_file:
-            st.success(f"✅ {template_file.name}")
-    
-    with col2:
-        st.markdown("#### 📊 Planilha XLSX")
-        excel_file = st.file_uploader(
-            "Dados dos funcionários",
-            type=['xlsx'],
-            help="Colunas: Nome, Cargo, Setor, Matricula",
-            key="excel_upload"
-        )
-        
-        if excel_file:
-            st.success(f"✅ {excel_file.name}")
-            try:
-                df_preview = pd.read_excel(excel_file)
-                st.dataframe(df_preview.head(3), use_container_width=True)
-                st.info(f"📊 {len(df_preview)} funcionários")
-            except Exception as e:
-                st.error(f"Erro: {e}")
-    
-    # Placeholders disponíveis
-    with st.expander("🏷️ Placeholders Disponíveis", expanded=False):
-        st.markdown("""
-        **Dados Pessoais:**
-        - `{{NOME}}` - Nome do funcionário
-        - `{{CARGO}}` - Cargo/função
-        - `{{SETOR}}` - Departamento
-        - `{{MATRICULA}}` - Número de matrícula
-        
-        **Datas:**
-        - `{{DATA}}` - Data atual (DD/MM/YYYY)
-        - `{{DATA_COMPLETA}}` - Data por extenso
-        - `{{HORA}}` - Horário atual
-        - `{{MES}}` - Mês atual
-        - `{{ANO}}` - Ano atual
-        
-        **Riscos:**
-        - `{{RISCOS}}` - Lista simples de riscos
-        - `{{RISCOS_DETALHADOS}}` - Riscos por categoria
-        - `{{RISCOS_TABELA}}` - Tabela formatada (substitui por tabela real)
-        - `{{TOTAL_RISCOS}}` - Quantidade de riscos
-        - `{{TOTAL_CATEGORIAS}}` - Quantidade de categorias
-        - `{{RISCOS_AUTOMATICOS}}` - Riscos com unidade automática
-        - `{{RISCOS_MANUAIS}}` - Riscos com unidade manual
-        
-        **Sistema:**
-        - `{{USUARIO}}` - Nome do usuário do sistema
-        - `{{EMAIL_USUARIO}}` - Email do usuário
-        - `{{VERSAO_SISTEMA}}` - Versão atual
-        - `{{ID_GERACAO}}` - ID único da geração
-        """)
-    
-    # Botão de geração
-    if template_file and excel_file:
-        st.markdown("### 🚀 Gerar OS e Relatório")
-        
-        if st.button("📄 Gerar Tudo", type="primary", use_container_width=True):
-            with st.spinner("Processando..."):
-                progress = st.progress(0)
-                status = st.empty()
-                
-                for i in range(100):
-                    time.sleep(0.02)
-                    progress.progress(i + 1)
-                    if i < 30:
-                        status.text("📄 Processando template...")
-                    elif i < 60:
-                        status.text("📊 Lendo funcionários...")
-                    elif i < 80:
-                        status.text("⚠️ Inserindo riscos...")
+                    st.error("Por favor, preencha todos os campos")
+    with tab2:
+        with st.form("register_form"):
+            reg_email = st.text_input("Email", placeholder="seu@email.com", key="reg_email")
+            reg_password = st.text_input("Senha", type="password", key="reg_password")
+            reg_password_confirm = st.text_input("Confirmar Senha", type="password")
+            if st.form_submit_button("Registrar", use_container_width=True):
+                if reg_email and reg_password and reg_password_confirm:
+                    if reg_password != reg_password_confirm:
+                        st.error("As senhas não coincidem")
                     else:
-                        status.text("📋 Gerando relatório...")
-                
-                try:
-                    # Gerar documentos
-                    zip_result, historico = gerar_documentos_os_avancados(
-                        template_file, excel_file, risks_salvos
-                    )
-                    
-                    if zip_result and historico:
-                        # Gerar relatório
-                        relatorio = gerar_relatorio_os(historico, risks_salvos)
-                        
-                        # Atualizar dados
-                        dados_usuario = get_user_data()
-                        historico_completo = dados_usuario.get('historico_os', [])
-                        historico_completo.extend(historico)
-                        
-                        save_user_data({
-                            'creditos': max(0, dados_usuario.get('creditos', 10) - 1),
-                            'os_geradas_total': dados_usuario.get('os_geradas_total', 0) + len(historico),
-                            'ultimo_uso': datetime.now().strftime("%d/%m/%Y"),
-                            'historico_os': historico_completo
-                        })
-                        
-                        st.success("✅ Geração concluída!")
-                        st.balloons()
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.download_button(
-                                "📥 Baixar OS (ZIP)",
-                                data=zip_result,
-                                file_name=f"OS_Lote_{datetime.now().strftime('%Y%m%d_%H%M')}.zip",
-                                mime="application/zip",
-                                use_container_width=True
-                            )
-                        
-                        with col2:
-                            if relatorio:
-                                st.download_button(
-                                    "📊 Baixar Relatório",
-                                    data=relatorio,
-                                    file_name=f"Relatorio_OS_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
-                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                    use_container_width=True
-                                )
-                        
-                        st.info(f"📄 {len(historico)} OS geradas • 📊 1 Relatório criado")
-                    
-                except Exception as e:
-                    st.error(f"❌ Erro: {e}")
-                
-                status.empty()
-                progress.empty()
+                        success, message = auth_manager.register_user(reg_email, reg_password)
+                        if success:
+                            st.success(message)
+                            st.info("Agora você pode fazer login com suas credenciais")
+                        else:
+                            st.error(message)
+                else:
+                    st.error("Por favor, preencha todos os campos")
 
-def show_reports_page():
-    """NOVA PÁGINA - Relatórios e Histórico"""
-    st.markdown('<div class="section-header">📊 Relatórios e Histórico</div>', unsafe_allow_html=True)
-    
-    dados_usuario = get_user_data()
-    historico_os = dados_usuario.get('historico_os', [])
-    
-    if not historico_os:
-        st.markdown("""
-        <div class="alert alert-info">
-            <strong>📊 Nenhum relatório disponível</strong><br>
-            Gere suas primeiras OS na aba "Gerar OS" para ver os relatórios aqui.
-        </div>
-        """, unsafe_allow_html=True)
-        return
-    
-    # Estatísticas gerais
-    st.markdown("### 📈 Estatísticas Gerais")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        create_metric_card("Total OS", len(historico_os), "Geradas")
-    
-    with col2:
-        funcionarios_unicos = len(set(item['funcionario'] for item in historico_os))
-        create_metric_card("Funcionários", funcionarios_unicos, "Diferentes")
-    
-    with col3:
-        setores_unicos = len(set(item['setor'] for item in historico_os))
-        create_metric_card("Setores", setores_unicos, "Diferentes")
-    
-    with col4:
-        riscos_auto_total = sum(item.get('riscos_automaticos', 0) for item in historico_os)
-        create_metric_card("Auto Detecções", riscos_auto_total, "VDVR/AREN/etc")
-    
-    # Histórico detalhado
-    st.markdown("### 📋 Histórico Detalhado")
-    
-    # Filtros
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        setores_disponiveis = sorted(set(item['setor'] for item in historico_os))
-        setor_filtro = st.selectbox(
-            "🏢 Filtrar por Setor", 
-            ["Todos"] + setores_disponiveis,
-            key="setor_filtro"
-        )
-    
-    with col2:
-        data_inicio = st.date_input(
-            "📅 Data Inicial",
-            value=datetime.now() - timedelta(days=30),
-            key="data_inicio"
-        )
-    
-    with col3:
-        data_fim = st.date_input(
-            "📅 Data Final",
-            value=datetime.now(),
-            key="data_fim"
-        )
-    
-    # Filtrar dados
-    historico_filtrado = historico_os
-    
-    if setor_filtro != "Todos":
-        historico_filtrado = [item for item in historico_filtrado if item['setor'] == setor_filtro]
-    
-    historico_filtrado = [
-        item for item in historico_filtrado 
-        if data_inicio <= datetime.fromisoformat(item['data_geracao']).date() <= data_fim
-    ]
-    
-    # Mostrar dados filtrados
-    if historico_filtrado:
-        st.info(f"📊 Mostrando {len(historico_filtrado)} de {len(historico_os)} registros")
-        
-        # Converter para DataFrame para exibição
-        df_historico = pd.DataFrame(historico_filtrado)
-        df_historico['Data/Hora'] = pd.to_datetime(df_historico['data_geracao']).dt.strftime('%d/%m/%Y %H:%M')
-        
-        # Reordenar colunas
-        colunas_display = ['Data/Hora', 'funcionario', 'cargo', 'setor', 'total_riscos', 'riscos_automaticos', 'id_geracao']
-        df_display = df_historico[colunas_display].copy()
-        df_display.columns = ['Data/Hora', 'Funcionário', 'Cargo', 'Setor', 'Riscos', 'Auto', 'ID']
-        
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-        
-        # Análises adicionais
-        with st.expander("📊 Análises Adicionais", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**📈 OS por Setor:**")
-                setor_count = df_historico['setor'].value_counts()
-                for setor, count in setor_count.items():
-                    st.write(f"• {setor}: {count} OS")
-            
-            with col2:
-                st.markdown("**🤖 Detecções Automáticas:**")
-                total_riscos = df_historico['total_riscos'].sum()
-                total_auto = df_historico['riscos_automaticos'].sum()
-                if total_riscos > 0:
-                    pct_auto = (total_auto / total_riscos) * 100
-                    st.metric("% Automático", f"{pct_auto:.1f}%", f"{total_auto}/{total_riscos}")
-        
-        # Botão para gerar relatório consolidado
-        if st.button("📋 Gerar Relatório Consolidado", use_container_width=True):
-            with st.spinner("Gerando relatório consolidado..."):
-                # Aqui você pode implementar um relatório mais abrangente
-                st.success("🎯 Funcionalidade de relatório consolidado pode ser expandida!")
-    
-    else:
-        st.warning("❌ Nenhum registro encontrado com os filtros aplicados.")
-
-def show_credits_management():
-    st.markdown('<div class="section-header">💰 Créditos</div>', unsafe_allow_html=True)
-    
-    dados_usuario = get_user_data()
-    creditos = dados_usuario.get('creditos', 10)
-    
-    create_metric_card("Saldo", creditos, "Disponíveis")
-    
-    col1, col2, col3 = st.columns(3)
-    pacotes = [
-        {"nome": "Básico", "creditos": 10, "preco": 50.00},
-        {"nome": "Pro", "creditos": 25, "preco": 100.00},
-        {"nome": "Premium", "creditos": 50, "preco": 180.00}
-    ]
-    
-    for idx, pac in enumerate(pacotes):
-        with [col1, col2, col3][idx]:
-            st.markdown(f"""
-            <div class="metric-card" style="text-align: center;">
-                <div style="font-size: 1.5rem; margin-bottom: 1rem;">📦</div>
-                <div style="font-weight: 700; font-size: 1.2rem;">{pac["nome"]}</div>
-                <div style="margin: 0.5rem 0;">{pac["creditos"]} créditos</div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color);">
-                    R$ {pac["preco"]:.2f}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button(f"🛒 {pac['nome']}", key=f"comprar_{idx}", use_container_width=True):
-                novo_total = creditos + pac["creditos"]
-                save_user_data({'creditos': novo_total})
-                st.success(f"✅ +{pac['creditos']} créditos!")
-                time.sleep(1)
+def check_authentication():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'user_data' not in st.session_state:
+        st.session_state.user_data = None
+    if st.session_state.authenticated and st.session_state.user_data:
+        session_token = st.session_state.user_data.get('session_token')
+        if session_token:
+            is_valid, _ = auth_manager.validate_session(session_token)
+            if not is_valid:
+                st.session_state.authenticated = False
+                st.session_state.user_data = None
                 st.rerun()
 
-# --- Main ---
+def logout_user():
+    if st.session_state.user_data and st.session_state.user_data.get('session_token'):
+        auth_manager.logout_user(st.session_state.user_data['session_token'])
+    st.session_state.authenticated = False
+    st.session_state.user_data = None
+    st.session_state.user_data_loaded = False
+    st.rerun()
+
+def show_user_info():
+    if st.session_state.get('authenticated'):
+        user_email = st.session_state.user_data.get('email', 'N/A')
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f'<div class="user-info">👤 <strong>Usuário:</strong> {user_email}</div>', unsafe_allow_html=True)
+        with col2:
+            if st.button("Sair", type="secondary"):
+                logout_user()
+
+def init_user_session_state():
+    if st.session_state.get('authenticated') and not st.session_state.get('user_data_loaded'):
+        user_id = st.session_state.user_data.get('user_id')
+        if user_id:
+            st.session_state.medicoes_adicionadas = user_data_manager.get_user_measurements(user_id)
+            st.session_state.epis_adicionados = user_data_manager.get_user_epis(user_id)
+            st.session_state.riscos_manuais_adicionados = user_data_manager.get_user_manual_risks(user_id)
+            st.session_state.user_data_loaded = True
+    
+    if 'medicoes_adicionadas' not in st.session_state:
+        st.session_state.medicoes_adicionadas = []
+    if 'epis_adicionados' not in st.session_state:
+        st.session_state.epis_adicionados = []
+    if 'riscos_manuais_adicionados' not in st.session_state:
+        st.session_state.riscos_manuais_adicionados = []
+    if 'cargos_concluidos' not in st.session_state:
+        st.session_state.cargos_concluidos = set()
+
+def normalizar_texto(texto):
+    if not isinstance(texto, str): return ""
+    return re.sub(r'[\s\W_]+', '', texto.lower().strip())
+
+def mapear_e_renomear_colunas_funcionarios(df):
+    df_copia = df.copy()
+    mapeamento = {
+        'nome_do_funcionario': ['nomedofuncionario', 'nome', 'funcionario', 'funcionário', 'colaborador', 'nomecompleto'],
+        'funcao': ['funcao', 'função', 'cargo'],
+        'data_de_admissao': ['datadeadmissao', 'dataadmissao', 'admissao', 'admissão'],
+        'setor': ['setordetrabalho', 'setor', 'area', 'área', 'departamento'],
+        'descricao_de_atividades': ['descricaodeatividades', 'atividades', 'descricaoatividades', 'descriçãodeatividades', 'tarefas', 'descricaodastarefas'],
+        'empresa': ['empresa'],
+        'unidade': ['unidade']
+    }
+    colunas_renomeadas = {}
+    colunas_df_normalizadas = {normalizar_texto(col): col for col in df_copia.columns}
+    for nome_padrao, nomes_possiveis in mapeamento.items():
+        for nome_possivel in nomes_possiveis:
+            if nome_possivel in colunas_df_normalizadas:
+                coluna_original = colunas_df_normalizadas[nome_possivel]
+                colunas_renomeadas[coluna_original] = nome_padrao
+                break
+    df_copia.rename(columns=colunas_renomeadas, inplace=True)
+    return df_copia
+
+@st.cache_data
+def carregar_planilha(arquivo):
+    if arquivo is None: return None
+    try:
+        return pd.read_excel(arquivo)
+    except Exception as e:
+        st.error(f"Erro ao ler o ficheiro Excel: {e}")
+        return None
+
+@st.cache_data
+def obter_dados_pgr():
+    data = [
+        {'categoria': 'fisico', 'risco': 'Ruído (Contínuo ou Intermitente)', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'},
+        {'categoria': 'fisico', 'risco': 'Ruído (Impacto)', 'possiveis_danos': 'Perda auditiva, trauma acústico.'},
+        {'categoria': 'fisico', 'risco': 'Vibração de Corpo Inteiro', 'possiveis_danos': 'Problemas na coluna, dores lombares.'},
+        {'categoria': 'fisico', 'risco': 'Vibração de Mãos e Braços', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios.'},
+        {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'},
+        {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'},
+        {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'},
+        {'categoria': 'fisico', 'risco': 'Radiações Não-Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'},
+        {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'},
+        {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites, micoses.'},
+        {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses (silicose, asbestose), irritação respiratória.'},
+        {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias (febre dos fumos metálicos), intoxicações.'},
+        {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'},
+        {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'},
+        {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'},
+        {'categoria': 'quimico', 'risco': 'Produtos Químicos em Geral', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'},
+        {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções, doenças infecciosas (tétano, tuberculose).'},
+        {'categoria': 'biologico', 'risco': 'Fungos', 'possiveis_danos': 'Micoses, alergias, infecções respiratórias.'},
+        {'categoria': 'biologico', 'risco': 'Vírus', 'possiveis_danos': 'Doenças virais (hepatite, HIV), infecções.'},
+        {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'},
+        {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'},
+        {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'},
+        {'categoria': 'acidente', 'risco': 'Máquinas e Equipamentos sem Proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'},
+        {'categoria': 'acidente', 'risco': 'Eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular.'},
+        {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'},
+        {'categoria': 'acidente', 'risco': 'Projeção de Partículas', 'possiveis_danos': 'Lesões oculares, cortes na pele.'}
+    ]
+    return pd.DataFrame(data)
+
+def substituir_placeholders(doc, contexto):
+    """
+    Substitui placeholders preservando a formatação do template.
+    """
+    def aplicar_formatacao_padrao(run):
+        """Aplica formatação Segoe UI 9pt"""
+        run.font.name = 'Segoe UI'
+        run.font.size = Pt(9)
+        return run
+
+    def processar_paragrafo(p):
+        texto_original_paragrafo = p.text
+
+        # --- Lógica CORRIGIDA E MANTIDA para [MEDIÇÕES] ---
+        if "[MEDIÇÕES]" in texto_original_paragrafo:
+            for run in p.runs:
+                run.text = ''
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            medicoes_valor = contexto.get("[MEDIÇÕES]", "Não aplicável")
+            if medicoes_valor == "Não aplicável" or not medicoes_valor.strip():
+                run = aplicar_formatacao_padrao(p.add_run("Não aplicável"))
+                run.font.bold = False
+            else:
+                linhas = medicoes_valor.split('\n')
+                for i, linha in enumerate(linhas):
+                    if not linha.strip(): continue
+                    if i > 0: p.add_run().add_break()
+                    if ":" in linha:
+                        partes = linha.split(":", 1)
+                        agente_texto = partes[0].strip() + ":"
+                        valor_texto = partes[1].strip()
+                        run_agente = aplicar_formatacao_padrao(p.add_run(agente_texto + " "))
+                        run_agente.font.bold = True
+                        run_valor = aplicar_formatacao_padrao(p.add_run(valor_texto))
+                        run_valor.font.bold = False
+                    else:
+                        run_simples = aplicar_formatacao_padrao(p.add_run(linha))
+                        run_simples.font.bold = False
+            return
+
+        # --- Lógica RESTAURADA E CORRIGIDA para outros placeholders ---
+        placeholders_no_paragrafo = [key for key in contexto if key in texto_original_paragrafo]
+        if not placeholders_no_paragrafo:
+            return
+
+        # Preserva o estilo do primeiro 'run', que geralmente define o estilo do rótulo no template
+        estilo_rotulo = {
+            'bold': p.runs[0].bold if p.runs else False,
+            'italic': p.runs[0].italic if p.runs else False,
+            'underline': p.runs[0].underline if p.runs else False,
+        }
+
+        # Substitui todos os placeholders para obter o texto final
+        texto_final = texto_original_paragrafo
+        for key in placeholders_no_paragrafo:
+            texto_final = texto_final.replace(key, str(contexto[key]))
+        
+        # Limpa o parágrafo para reescrevê-lo com a formatação correta
+        p.clear()
+
+        # Reconstrói o parágrafo, aplicando o estilo do rótulo e deixando os valores sem formatação
+        texto_restante = texto_final
+        for i, key in enumerate(placeholders_no_paragrafo):
+            valor_placeholder = str(contexto[key])
+            partes = texto_restante.split(valor_placeholder, 1)
+            
+            # Adiciona o texto antes do valor (que é o rótulo) com o estilo preservado
+            if partes[0]:
+                run_rotulo = aplicar_formatacao_padrao(p.add_run(partes[0]))
+                run_rotulo.font.bold = estilo_rotulo['bold']
+                run_rotulo.font.italic = estilo_rotulo['italic']
+                run_rotulo.underline = estilo_rotulo['underline']
+
+            # Adiciona o valor do placeholder sem formatação
+            run_valor = aplicar_formatacao_padrao(p.add_run(valor_placeholder))
+            run_valor.font.bold = False
+            run_valor.font.italic = False
+            run_valor.font.underline = False
+            
+            texto_restante = partes[1]
+
+        # Adiciona qualquer texto que sobrar no final, com o estilo do rótulo
+        if texto_restante:
+            run_final = aplicar_formatacao_padrao(p.add_run(texto_restante))
+            run_final.font.bold = estilo_rotulo['bold']
+            run_final.font.italic = estilo_rotulo['italic']
+            run_final.underline = estilo_rotulo['underline']
+
+    # Processar parágrafos em tabelas e no corpo do documento
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    processar_paragrafo(p)
+    for p in doc.paragraphs:
+        processar_paragrafo(p)
+
+
+def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
+    doc = Document(modelo_doc_carregado)
+    riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
+    riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+
+    # Processar riscos selecionados
+    for _, risco_row in riscos_info.iterrows():
+        categoria = str(risco_row.get("categoria", "")).lower()
+        if categoria in riscos_por_categoria:
+            riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
+            danos = risco_row.get("possiveis_danos")
+            if pd.notna(danos): 
+                danos_por_categoria[categoria].append(str(danos))
+
+    # Processar riscos manuais
+    if riscos_manuais:
+        map_categorias_rev = {v: k for k, v in CATEGORIAS_RISCO.items()}
+        for risco_manual in riscos_manuais:
+            categoria_display = risco_manual.get('category')
+            categoria_alvo = map_categorias_rev.get(categoria_display)
+            if categoria_alvo:
+                riscos_por_categoria[categoria_alvo].append(risco_manual.get('risk_name', ''))
+                if risco_manual.get('possible_damages'):
+                    danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
+
+    # Limpar duplicatas
+    for cat in danos_por_categoria:
+        danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+
+    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
+    medicoes_formatadas = []
+    for med in medicoes_manuais:
+        agente = str(med.get('agent', '')).strip()
+        valor = str(med.get('value', '')).strip()
+        unidade = str(med.get('unit', '')).strip()
+        epi = str(med.get('epi', '')).strip()
+
+        if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
+            linha = f"{agente}: {valor}"
+            if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
+                linha += f" {unidade}"
+            if epi and epi not in ['', 'N/A', 'nan', 'None']:
+                linha += f" | EPI: {epi}"
+            medicoes_formatadas.append(linha)
+    medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
+
+    # Processar data de admissão
+    data_admissao = "Não informado"
+    if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
+        try: 
+            data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
+        except Exception: 
+            data_admissao = str(funcionario['data_de_admissao'])
+    elif 'Data de Admissão' in funcionario and pd.notna(funcionario['Data de Admissão']):
+        try: 
+            data_admissao = pd.to_datetime(funcionario['Data de Admissão']).strftime('%d/%m/%Y')
+        except Exception: 
+            data_admissao = str(funcionario['Data de Admissão'])
+
+    # Processar descrição de atividades
+    descricao_atividades = "Não informado"
+    if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
+        descricao_atividades = str(funcionario['descricao_de_atividades']).strip()
+    elif 'Descrição de Atividades' in funcionario and pd.notna(funcionario['Descrição de Atividades']):
+        descricao_atividades = str(funcionario['Descrição de Atividades']).strip()
+
+    if descricao_atividades == "Não informado" or descricao_atividades == "" or descricao_atividades == "nan":
+        funcao = str(funcionario.get('funcao', funcionario.get('Função', 'N/A')))
+        setor = str(funcionario.get('setor', funcionario.get('Setor', 'N/A')))
+        if funcao != 'N/A' and setor != 'N/A':
+            descricao_atividades = f"Atividades relacionadas à função de {funcao} no setor {setor}, incluindo todas as tarefas operacionais, administrativas e de apoio inerentes ao cargo."
+        else:
+            descricao_atividades = "Atividades operacionais, administrativas e de apoio conforme definido pela chefia imediata."
+
+    def tratar_lista_vazia(lista, separador=", "):
+        if not lista or all(not item.strip() for item in lista): 
+            return "Não identificado"
+        return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
+
+    # Contexto
+    contexto = {
+        "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
+        "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
+        "[NOME FUNCIONÁRIO]": str(funcionario.get("nome_do_funcionario", funcionario.get("Nome", "N/A"))), 
+        "[DATA DE ADMISSÃO]": data_admissao,
+        "[SETOR]": str(funcionario.get("setor", funcionario.get("Setor", "N/A"))), 
+        "[FUNÇÃO]": str(funcionario.get("funcao", funcionario.get("Função", "N/A"))),
+        "[DESCRIÇÃO DE ATIVIDADES]": descricao_atividades,
+        "[RISCOS FÍSICOS]": tratar_lista_vazia(riscos_por_categoria["fisico"]),
+        "[RISCOS DE ACIDENTE]": tratar_lista_vazia(riscos_por_categoria["acidente"]),
+        "[RISCOS QUÍMICOS]": tratar_lista_vazia(riscos_por_categoria["quimico"]),
+        "[RISCOS BIOLÓGICOS]": tratar_lista_vazia(riscos_por_categoria["biologico"]),
+        "[RISCOS ERGONÔMICOS]": tratar_lista_vazia(riscos_por_categoria["ergonomico"]),
+        "[POSSÍVEIS DANOS RISCOS FÍSICOS]": tratar_lista_vazia(danos_por_categoria["fisico"], "; "),
+        "[POSSÍVEIS DANOS RISCOS ACIDENTE]": tratar_lista_vazia(danos_por_categoria["acidente"], "; "),
+        "[POSSÍVEIS DANOS RISCOS QUÍMICOS]": tratar_lista_vazia(danos_por_categoria["quimico"], "; "),
+        "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
+        "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
+        "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
+        "[MEDIÇÕES]": medicoes_texto,
+    }
+
+    substituir_placeholders(doc, contexto)
+    return doc
+
+# --- APLICAÇÃO PRINCIPAL ---
 def main():
-    if not is_authenticated():
+    check_authentication()
+    init_user_session_state()
+    
+    if not st.session_state.get('authenticated'):
         show_login_page()
-    else:
-        show_main_app()
+        return
+    
+    user_id = st.session_state.user_data['user_id']
+    show_user_info()
+    
+    st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown("##### 📂 1. Carregue os Documentos")
+        col1, col2 = st.columns(2)
+        with col1:
+            arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx")
+        with col2:
+            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
+
+    if not arquivo_funcionarios or not arquivo_modelo_os:
+        st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
+        return
+    
+    df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
+    if df_funcionarios_raw is None:
+        st.stop()
+
+    df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
+    df_pgr = obter_dados_pgr()
+
+    with st.container(border=True):
+        st.markdown('##### 👥 2. Selecione os Funcionários')
+        setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
+        setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
+        df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
+        st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
+        funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
+        funcoes_formatadas = []
+        if setor_sel:
+            for funcao in funcoes_disponiveis:
+                concluido = all((s, funcao) in st.session_state.cargos_concluidos for s in setor_sel)
+                if concluido:
+                    funcoes_formatadas.append(f"{funcao} ✅ Concluído")
+                else:
+                    funcoes_formatadas.append(funcao)
+        else:
+            funcoes_formatadas = funcoes_disponiveis
+        funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
+        funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
+        df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
+        st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
+        st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
+
+    with st.container(border=True):
+        st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
+        st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
+        riscos_selecionados = []
+        nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
+        tabs = st.tabs(nomes_abas)
+        for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
+            with tabs[i]:
+                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
+                selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
+                riscos_selecionados.extend(selecionados)
+        with tabs[-1]:
+            with st.form("form_risco_manual", clear_on_submit=True):
+                st.markdown("###### Adicionar um Risco que não está na lista")
+                risco_manual_nome = st.text_input("Descrição do Risco")
+                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
+                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
+                if st.form_submit_button("Adicionar Risco Manual"):
+                    if risco_manual_nome and categoria_manual:
+                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
+                        st.session_state.user_data_loaded = False
+                        st.rerun()
+            if st.session_state.riscos_manuais_adicionados:
+                st.write("**Riscos manuais salvos:**")
+                for r in st.session_state.riscos_manuais_adicionados:
+                    col1, col2 = st.columns([4, 1])
+                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
+                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
+                        user_data_manager.remove_manual_risk(user_id, r['id'])
+                        st.session_state.user_data_loaded = False
+                        st.rerun()
+        
+        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
+        if total_riscos > 0:
+            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
+                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
+                for risco_nome in riscos_selecionados:
+                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
+                    if not categoria_key_series.empty:
+                        categoria_key = categoria_key_series.iloc[0]
+                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
+                        if categoria_display:
+                            riscos_para_exibir[categoria_display].append(risco_nome)
+                for risco_manual in st.session_state.riscos_manuais_adicionados:
+                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
+                for categoria, lista_riscos in riscos_para_exibir.items():
+                    if lista_riscos:
+                        st.markdown(f"**{categoria}**")
+                        for risco in sorted(list(set(lista_riscos))):
+                            st.markdown(f"- {risco}")
+        
+        st.divider()
+
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            with st.expander("📊 **Adicionar Medições**"):
+                with st.form("form_medicao", clear_on_submit=True):
+                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
+                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
+                    agente_manual = st.text_input("...ou digite um novo aqui:")
+                    valor = st.text_input("Valor Medido")
+                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
+                    epi_med = st.text_input("EPI Associado (Opcional)")
+                    if st.form_submit_button("Adicionar Medição"):
+                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
+                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
+                            user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+                        else:
+                            st.warning("Por favor, preencha o Agente e o Valor.")
+                if st.session_state.medicoes_adicionadas:
+                    st.write("**Medições salvas:**")
+                    for med in st.session_state.medicoes_adicionadas:
+                        col1, col2 = st.columns([4, 1])
+                        col1.markdown(f"- {med['agent']}: {med['value']} {med['unit']}")
+                        if col2.button("Remover", key=f"rem_med_{med['id']}"):
+                            user_data_manager.remove_measurement(user_id, med['id'])
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+        with col_exp2:
+            with st.expander("🦺 **Adicionar EPIs Gerais**"):
+                with st.form("form_epi", clear_on_submit=True):
+                    epi_nome = st.text_input("Nome do EPI")
+                    if st.form_submit_button("Adicionar EPI"):
+                        if epi_nome:
+                            user_data_manager.add_epi(user_id, epi_nome)
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+                if st.session_state.epis_adicionados:
+                    st.write("**EPIs salvos:**")
+                    for epi in st.session_state.epis_adicionados:
+                        col1, col2 = st.columns([4, 1])
+                        col1.markdown(f"- {epi['epi_name']}")
+                        if col2.button("Remover", key=f"rem_epi_{epi['id']}"):
+                            user_data_manager.remove_epi(user_id, epi['id'])
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+
+    st.divider()
+    if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
+        with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
+            documentos_gerados = []
+            combinacoes_processadas = set()
+            for _, func in df_final_filtrado.iterrows():
+                combinacoes_processadas.add((func['setor'], func['funcao']))
+                doc = gerar_os(
+                    func, 
+                    df_pgr, 
+                    riscos_selecionados, 
+                    st.session_state.epis_adicionados,
+                    st.session_state.medicoes_adicionadas, 
+                    st.session_state.riscos_manuais_adicionados, 
+                    arquivo_modelo_os
+                )
+                doc_io = BytesIO()
+                doc.save(doc_io)
+                doc_io.seek(0)
+                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
+                caminho_no_zip = f"{func.get('setor', 'SemSetor')}/{func.get('funcao', 'SemFuncao')}/OS_{nome_limpo}.docx"
+                documentos_gerados.append((caminho_no_zip, doc_io.getvalue()))
+            st.session_state.cargos_concluidos.update(combinacoes_processadas)
+            if documentos_gerados:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for nome_arquivo, conteudo_doc in documentos_gerados:
+                        zip_file.writestr(nome_arquivo, conteudo_doc)
+                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
+                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
+                st.download_button(
+                    label="📥 Baixar Todas as OS (.zip)", 
+                    data=zip_buffer.getvalue(), 
+                    file_name=nome_arquivo_zip, 
+                    mime="application/zip",
+                    use_container_width=True
+                )
 
 if __name__ == "__main__":
     main()
