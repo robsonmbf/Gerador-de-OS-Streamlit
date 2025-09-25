@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 # --- DEFINIÇÃO DE CONSTANTES GLOBAIS ---
-UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
+UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "m/s¹⁷⁵", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
 AGENTES_DE_RISCO = sorted([
     "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
     "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
@@ -365,8 +365,7 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         agente = str(med.get('agent', '')).strip()
         valor = str(med.get('value', '')).strip()
         unidade = str(med.get('unit', '')).strip()
-        epi = str(med.get('epi', '')).strip()
-
+       
         if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
             linha = f"{agente}: {valor}"
             if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
