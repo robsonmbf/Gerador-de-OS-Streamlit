@@ -206,7 +206,7 @@ def obter_dados_pgr():
         {'categoria': 'fisico', 'risco': 'Ambiente Artificialmente Frio', 'possiveis_danos': 'Estresse, desconforto, dormência, rigidez nas partes com maior intensidade de exposição ao frio, redução da destreza, formigamento, redução da sensibilidade dos dedos e flexibilidade das articulações.'},
         {'categoria': 'fisico', 'risco': 'Exposição ao Ruído', 'possiveis_danos': 'Perda Auditiva Induzida pelo Ruído Ocupacional (PAIRO).'},
         {'categoria': 'fisico', 'risco': 'Vibrações Localizadas (mão/braço)', 'possiveis_danos': 'Alterações articulares e vasomotoras.'},
-        {'categoria': 'fisico', 'risco': 'Vibração de Corpo Inteiro (AREN)', 'possiveis_danos': 'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.'},
+        {'categoria': 'fisico', 'risco': 'Vibração de Corpo Inteiro (AREN/VDVR)', 'possiveis_danos': 'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.'},
         {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'},
         {'categoria': 'fisico', 'risco': 'Radiações Não Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'},
         {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'},
