@@ -362,20 +362,19 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
     # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
     medicoes_formatadas = []
     for med in medicoes_manuais:
-        agente = str(med.get('agent', '')).strip()
-        valor = str(med.get('value', '')).strip()
-        unidade = str(med.get('unit', '')).strip()
+        agente = str(med.get("agent", "")).strip()
+        valor = str(med.get("value", "")).strip()
+        unidade = str(med.get("unit", "")).strip()
+        epi_med = str(med.get("epi_associated", "")).strip() 
        
-        if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
+        if agente and valor:
             linha = f"{agente}: {valor}"
-            if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
+            if unidade and unidade not in ["N/A", "nan", "None"]:
                 linha += f" {unidade}"
-            if epi and epi not in ['', 'N/A', 'nan', 'None']:
-                linha += f" | EPI: {epi}"
+            if epi_med and epi_med not in ["N/A", "nan", "None"]:
+                linha += f" | EPI: {epi_med}"
             medicoes_formatadas.append(linha)
-    medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
-
-    # Processar data de admissão
+        medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
     data_admissao = "Não informado"
     if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
         try: 
