@@ -204,7 +204,12 @@ Atualizei a função obter_dados_pgr() para retornar a lista de dados diretament
 
 Tarefa concluída
 Sugestões de acompanhamento
-Enviar mensagem para Manus
+O sistema apresenta esse erro 
+File "/mount/src/gerador-de-os-streamlit/app.py", line 47
+  NameError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+                                                                                                                                                                                                                   ^
+SyntaxError: unterminated string literal (detected at line 47)
+
 testeapp.py
 import streamlit as st
 import pandas as pd
