@@ -29,7 +29,7 @@ UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "m/s¹⁷⁵", "ppm", "mg/m³", "%", "°
 # Lista de agentes de risco combinada e atualizada
 AGENTES_DE_RISCO = sorted([
     'Abrasão',
-    'Ambiente Artificialmente Frio',
+    'Ambiente Artificialmente Frio',  
     'Animais Peçonhentos',
     'Animais peçonhentos',
     'Arranjo Físico Inadequado',
@@ -205,7 +205,6 @@ def inicializar_session_state():
         st.session_state.user_email = ""
     if 'db_manager' not in st.session_state:
         st.session_state.db_manager = DatabaseManager()
-        st.session_state.db_manager.connect()
     if 'auth_manager' not in st.session_state:
         st.session_state.auth_manager = AuthManager(st.session_state.db_manager)
     if 'user_data_manager' not in st.session_state:
