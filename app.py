@@ -228,7 +228,9 @@ def mostrar_tela_login():
         submit_button = st.form_submit_button("Login")
 
         if submit_button:
-            if st.session_state.auth_manager.login_user(email, password):
+            if not email or not password:
+                st.error("Por favor, preencha o email e a senha.")
+            elif st.session_state.auth_manager.login_user(email, password):
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
                 st.session_state.user_data_manager = UserDataManager(st.session_state.db_manager, email)
@@ -426,3 +428,4 @@ if st.session_state.logged_in:
     mostrar_app_principal()
 else:
     mostrar_tela_login()
+
