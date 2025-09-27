@@ -1,721 +1,522 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-import zipfile
 from io import BytesIO
-import time
-import re
-import sys
-import os
+import datetime
 
-# Adicionar o diretório atual ao path para importar módulos locais
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from database.models import DatabaseManager
-from database.auth import AuthManager
-from database.user_data import UserDataManager
-
-# --- Configuração da Página ---
+# Configuração da página
 st.set_page_config(
-    page_title="Gerador de Ordens de Serviço (OS)",
-    page_icon="📄",
+    page_title="📋 Gerador de Ordem de Serviço - NR01",
+    page_icon="📋",
     layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- DEFINIÇÃO DE CONSTANTES GLOBAIS ---
-UNIDADES_DE_MEDIDA = ["dB(A)", "m/s²", "m/s¹⁷⁵", "ppm", "mg/m³", "%", "°C", "lx", "cal/cm²", "µT", "kV/m", "W/m²", "f/cm³", "Não aplicável"]
-AGENTES_DE_RISCO = sorted([
-    "Ruído (Contínuo ou Intermitente)", "Ruído (Impacto)", "Vibração de Corpo Inteiro", "Vibração de Mãos e Braços",
-    "Radiações Ionizantes", "Radiações Não-Ionizantes", "Frio", "Calor", "Pressões Anormais", "Umidade", "Poeiras", 
-    "Fumos", "Névoas", "Neblinas", "Gases", "Vapores", "Produtos Químicos em Geral", "Vírus", "Bactérias", 
-    "Protozoários", "Fungos", "Parasitas", "Bacilos"
-])
-CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
-
-# --- Inicialização dos Gerenciadores ---
-@st.cache_resource
-def init_managers():
-    db_manager = DatabaseManager()
-    auth_manager = AuthManager(db_manager)
-    user_data_manager = UserDataManager(db_manager)
-    return db_manager, auth_manager, user_data_manager
-
-db_manager, auth_manager, user_data_manager = init_managers()
-
-# --- CSS PERSONALIZADO ---
+# CSS personalizado
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] {
-        display: none;
-    }
-    .main-header {
+    .main-title {
         text-align: center;
-        padding-bottom: 20px;
+        color: #1e3a8a;
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 30px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
     }
-    .auth-container {
-        max-width: 400px;
-        margin: 0 auto;
-        padding: 2rem;
-        border: 1px solid #ddd;
+    .section-header {
+        color: #1e40af;
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #3b82f6;
+        padding-bottom: 5px;
+    }
+    .info-box {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        padding: 20px;
         border-radius: 10px;
-        background-color: #f9f9f9;
+        border-left: 4px solid #3b82f6;
+        margin: 15px 0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-    .user-info {
-        background-color: #262730; 
-        color: white;            
-        padding: 1rem;
-        border-radius: 5px;
-        margin-bottom: 1rem;
-        border: 1px solid #3DD56D; 
+    .success-box {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #22c55e;
+        margin: 15px 0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .warning-box {
+        background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #eab308;
+        margin: 15px 0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .upload-area {
+        border: 2px dashed #3b82f6;
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        background-color: #f8fafc;
+        margin: 20px 0;
+    }
+    .metric-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
 
+def create_sample_data():
+    """Cria dados de exemplo para demonstração"""
+    sample_data = {
+        'Nome': ['JOÃO SILVA SANTOS', 'MARIA OLIVEIRA COSTA', 'PEDRO ALVES FERREIRA'],
+        'Setor': ['PRODUCAO DE LA DE ACO', 'ADMINISTRACAO DE RH', 'MANUTENCAO QUIMICA'],
+        'Função': ['OPERADOR PRODUCAO I', 'ANALISTA ADM PESSOAL PL', 'MECANICO MANUT II'],
+        'Data de Admissão': ['15/03/2020', '22/08/2019', '10/01/2021'],
+        'Empresa': ['SUA EMPRESA', 'SUA EMPRESA', 'SUA EMPRESA'],
+        'Unidade': ['Matriz', 'Matriz', 'Matriz'],
+        'Descrição de Atividades': [
+            'Operar equipamentos de produção nível I, controlar parâmetros operacionais, realizar inspeções visuais e registrar dados de produção.',
+            'Executar atividades de administração de pessoal, controlar documentos trabalhistas, elaborar relatórios e dar suporte às equipes.',
+            'Executar manutenção preventiva e corretiva em equipamentos, diagnosticar falhas, trocar componentes e registrar intervenções.'
+        ]
+    }
+    return pd.DataFrame(sample_data)
 
-# --- FUNÇÕES DE AUTENTICAÇÃO E LÓGICA DE NEGÓCIO ---
-def show_login_page():
-    st.markdown("""<div class="main-header"><h1>🔐 Acesso ao Sistema</h1><p>Faça login ou registre-se para acessar o Gerador de OS</p></div>""", unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["Login", "Registro"])
-    with tab1:
-        with st.form("login_form"):
-            email = st.text_input("Email", placeholder="seu@email.com")
-            password = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar", use_container_width=True):
-                if email and password:
-                    success, message, session_data = auth_manager.login_user(email, password)
-                    if success:
-                        st.session_state.authenticated = True
-                        st.session_state.user_data = session_data
-                        st.session_state.user_data_loaded = False 
-                        st.success(message)
-                        st.rerun()
-                    else:
-                        st.error(message)
-                else:
-                    st.error("Por favor, preencha todos os campos")
-    with tab2:
-        with st.form("register_form"):
-            reg_email = st.text_input("Email", placeholder="seu@email.com", key="reg_email")
-            reg_password = st.text_input("Senha", type="password", key="reg_password")
-            reg_password_confirm = st.text_input("Confirmar Senha", type="password")
-            if st.form_submit_button("Registrar", use_container_width=True):
-                if reg_email and reg_password and reg_password_confirm:
-                    if reg_password != reg_password_confirm:
-                        st.error("As senhas não coincidem")
-                    else:
-                        success, message = auth_manager.register_user(reg_email, reg_password)
-                        if success:
-                            st.success(message)
-                            st.info("Agora você pode fazer login com suas credenciais")
-                        else:
-                            st.error(message)
-                else:
-                    st.error("Por favor, preencha todos os campos")
-
-def check_authentication():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'user_data' not in st.session_state:
-        st.session_state.user_data = None
-    if st.session_state.authenticated and st.session_state.user_data:
-        session_token = st.session_state.user_data.get('session_token')
-        if session_token:
-            is_valid, _ = auth_manager.validate_session(session_token)
-            if not is_valid:
-                st.session_state.authenticated = False
-                st.session_state.user_data = None
-                st.rerun()
-
-def logout_user():
-    if st.session_state.user_data and st.session_state.user_data.get('session_token'):
-        auth_manager.logout_user(st.session_state.user_data['session_token'])
-    st.session_state.authenticated = False
-    st.session_state.user_data = None
-    st.session_state.user_data_loaded = False
-    st.rerun()
-
-def show_user_info():
-    if st.session_state.get('authenticated'):
-        user_email = st.session_state.user_data.get('email', 'N/A')
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f'<div class="user-info">👤 <strong>Usuário:</strong> {user_email}</div>', unsafe_allow_html=True)
-        with col2:
-            if st.button("Sair", type="secondary"):
-                logout_user()
-
-def init_user_session_state():
-    if st.session_state.get('authenticated') and not st.session_state.get('user_data_loaded'):
-        user_id = st.session_state.user_data.get('user_id')
-        if user_id:
-            st.session_state.medicoes_adicionadas = user_data_manager.get_user_measurements(user_id)
-            st.session_state.epis_adicionados = user_data_manager.get_user_epis(user_id)
-            st.session_state.riscos_manuais_adicionados = user_data_manager.get_user_manual_risks(user_id)
-            st.session_state.user_data_loaded = True
+def validate_excel_structure(df):
+    """Valida se a planilha tem a estrutura necessária"""
+    required_columns = ['Nome', 'Setor', 'Função', 'Data de Admissão', 'Empresa', 'Unidade', 'Descrição de Atividades']
+    missing_columns = [col for col in required_columns if col not in df.columns]
     
-    if 'medicoes_adicionadas' not in st.session_state:
-        st.session_state.medicoes_adicionadas = []
-    if 'epis_adicionados' not in st.session_state:
-        st.session_state.epis_adicionados = []
-    if 'riscos_manuais_adicionados' not in st.session_state:
-        st.session_state.riscos_manuais_adicionados = []
-    if 'cargos_concluidos' not in st.session_state:
-        st.session_state.cargos_concluidos = set()
+    if missing_columns:
+        return False, f"Colunas obrigatórias faltando: {', '.join(missing_columns)}"
+    
+    if df.empty:
+        return False, "A planilha está vazia"
+    
+    return True, "Estrutura válida"
 
-def normalizar_texto(texto):
-    if not isinstance(texto, str): return ""
-    return re.sub(r'[\s\W_]+', '', texto.lower().strip())
-
-def mapear_e_renomear_colunas_funcionarios(df):
-    df_copia = df.copy()
-    mapeamento = {
-        'nome_do_funcionario': ['nomedofuncionario', 'nome', 'funcionario', 'funcionário', 'colaborador', 'nomecompleto'],
-        'funcao': ['funcao', 'função', 'cargo'],
-        'data_de_admissao': ['datadeadmissao', 'dataadmissao', 'admissao', 'admissão'],
-        'setor': ['setordetrabalho', 'setor', 'area', 'área', 'departamento'],
-        'descricao_de_atividades': ['descricaodeatividades', 'atividades', 'descricaoatividades', 'descriçãodeatividades', 'tarefas', 'descricaodastarefas'],
-        'empresa': ['empresa'],
-        'unidade': ['unidade']
+def create_os_document(funcionario_data, riscos_data, medidas_data, avaliacoes_data):
+    """Cria documento da Ordem de Serviço baseado no modelo NR-01"""
+    doc = Document()
+    
+    # Configurar margens
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(0.8)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+    
+    # Título principal
+    title_para = doc.add_paragraph()
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_para.add_run('ORDEM DE SERVIÇO - NR01')
+    title_run.bold = True
+    title_run.font.size = Inches(0.2)
+    
+    # Subtítulo
+    subtitle_para = doc.add_paragraph()
+    subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle_run = subtitle_para.add_run('Informações sobre Condições de Segurança e Saúde no Trabalho')
+    subtitle_run.italic = True
+    
+    doc.add_paragraph()  # Espaço
+    
+    # Cabeçalho com informações do funcionário
+    doc.add_paragraph(f"Empresa: {funcionario_data.get('Empresa', '')}\t\t\tUnidade: {funcionario_data.get('Unidade', '')}")
+    doc.add_paragraph(f"Nome do Funcionário: {funcionario_data.get('Nome', '')}")
+    doc.add_paragraph(f"Data de Admissão: {funcionario_data.get('Data de Admissão', '')}")
+    doc.add_paragraph(f"Setor de Trabalho: {funcionario_data.get('Setor', '')}\t\t\tFunção: {funcionario_data.get('Função', '')}")
+    
+    doc.add_paragraph()  # Espaço
+    
+    # Tarefas da função
+    heading = doc.add_heading('TAREFAS DA FUNÇÃO', level=2)
+    heading.runs[0].font.size = Inches(0.15)
+    doc.add_paragraph(funcionario_data.get('Descrição de Atividades', 'Atividades conforme descrição da função.'))
+    
+    # Agentes de riscos ocupacionais
+    heading = doc.add_heading('AGENTES DE RISCOS OCUPACIONAIS - NR01 item 1.4.1 b) I / item 1.4.4 a)', level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    
+    for tipo_risco, riscos in riscos_data.items():
+        if riscos.strip():
+            para = doc.add_paragraph()
+            para.add_run(f"➤ {tipo_risco}: ").bold = True
+            para.add_run(riscos)
+    
+    # Possíveis danos à saúde
+    heading = doc.add_heading('POSSÍVEIS DANOS À SAÚDE - NR01 item 1.4.1 b) I', level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    
+    danos_mapping = {
+        'Físico': 'Perda auditiva, fadiga, stress térmico',
+        'Químico': 'Intoxicação, irritação, dermatoses',
+        'Acidente': 'Ferimentos, fraturas, queimaduras',
+        'Ergonômico': 'Dores musculares, LER/DORT, fadiga',
+        'Biológico': 'Infecções, alergias, doenças'
     }
-    colunas_renomeadas = {}
-    colunas_df_normalizadas = {normalizar_texto(col): col for col in df_copia.columns}
-    for nome_padrao, nomes_possiveis in mapeamento.items():
-        for nome_possivel in nomes_possiveis:
-            if nome_possivel in colunas_df_normalizadas:
-                coluna_original = colunas_df_normalizadas[nome_possivel]
-                colunas_renomeadas[coluna_original] = nome_padrao
-                break
-    df_copia.rename(columns=colunas_renomeadas, inplace=True)
-    return df_copia
-
-@st.cache_data
-def carregar_planilha(arquivo):
-    if arquivo is None: return None
-    try:
-        return pd.read_excel(arquivo)
-    except Exception as e:
-        st.error(f"Erro ao ler o ficheiro Excel: {e}")
-        return None
-
-@st.cache_data
-def obter_dados_pgr():
-    data = [
-        {'categoria': 'quimico', 'risco': 'Exposição a Produto Químico', 'possiveis_danos': 'Irritação/lesão ocular, na pele e mucosas; Dermatites; Queimadura Química; Intoxicação; Náuseas; Vômitos.'},
-        {'categoria': 'fisico', 'risco': 'Ambiente Artificialmente Frio', 'possiveis_danos': 'Estresse, desconforto, dormência, rigidez nas partes com maior intensidade de exposição ao frio, redução da destreza, formigamento, redução da sensibilidade dos dedos e flexibilidade das articulações.'},
-        {'categoria': 'fisico', 'risco': 'Exposição ao Ruído', 'possiveis_danos': 'Perda Auditiva Induzida pelo Ruído Ocupacional (PAIRO).'},
-        {'categoria': 'fisico', 'risco': 'Vibrações Localizadas (mão/braço)', 'possiveis_danos': 'Alterações articulares e vasomotoras.'},
-        {'categoria': 'fisico', 'risco': 'Vibração de Corpo Inteiro (AREN/VDVR)', 'possiveis_danos': 'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.'},
-        {'categoria': 'fisico', 'risco': 'Radiações Ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'},
-        {'categoria': 'fisico', 'risco': 'Radiações Não Ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'},
-        {'categoria': 'fisico', 'risco': 'Pressões Anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'},
-        {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites, micoses.'},
-        {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'},
-        {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'},
-        {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses (silicose, asbestose), irritação respiratória.'},
-        {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias (febre dos fumos metálicos), intoxicações.'},
-        {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'},
-        {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'},
-        {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'},
-        {'categoria': 'quimico', 'risco': 'Produtos Químicos em Geral', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'},
-        {'categoria': 'biologico', 'risco': 'Bactérias', 'possiveis_danos': 'Infecções, doenças infecciosas (tétano, tuberculose).'}, 
-        {'categoria': 'biologico', 'risco': 'Fungos', 'possiveis_danos': 'Micoses, alergias, infecções respiratórias.'},
-        {'categoria': 'biologico', 'risco': 'Vírus', 'possiveis_danos': 'Doenças virais (hepatite, HIV), infecções.'},
-        {'categoria': 'ergonomico', 'risco': 'Levantamento e Transporte Manual de Peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'},
-        {'categoria': 'ergonomico', 'risco': 'Posturas Inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'},
-        {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'},
-        {'categoria': 'acidente', 'risco': 'Máquinas e Equipamentos sem Proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'},
-        {'categoria': 'acidente', 'risco': 'Eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho em Altura', 'possiveis_danos': 'Quedas, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Projeção de Partículas', 'possiveis_danos': 'Lesões oculares, cortes na pele.'},
-        {'categoria': 'acidente', 'risco': 'Animais peçonhentos', 'possiveis_danos': 'Picadas, mordidas, reações alérgicas, infecções, dor, inchaço, necrose, paralisia, morte.'},
-        {'categoria': 'acidente', 'risco': 'Armazenamento inadequado de materiais', 'possiveis_danos': 'Quedas, soterramento, esmagamento, lesões por esforço repetitivo.'},
-        {'categoria': 'acidente', 'risco': 'Atropelamento', 'possiveis_danos': 'Fraturas, lacerações, traumatismos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Choque contra objetos', 'possiveis_danos': 'Contusões, fraturas, lacerações.'},
-        {'categoria': 'acidente', 'risco': 'Colisão', 'possiveis_danos': 'Contusões, fraturas, lacerações, traumatismos.'},
-        {'categoria': 'acidente', 'risco': 'Contato com eletricidade', 'possiveis_danos': 'Choque elétrico, queimaduras, fibrilação ventricular, morte.'},
-        {'categoria': 'acidente', 'risco': 'Contato com superfície quente', 'possiveis_danos': 'Queimaduras de 1º, 2º ou 3º grau.'},
-        {'categoria': 'acidente', 'risco': 'Contato com superfície fria', 'possiveis_danos': 'Queimaduras por frio, hipotermia.'},
-        {'categoria': 'acidente', 'risco': 'Corte/Laceração', 'possiveis_danos': 'Hemorragia, infecção, perda de função.'},
-        {'categoria': 'acidente', 'risco': 'Empilhamento inadequado', 'possiveis_danos': 'Quedas, soterramento, esmagamento.'},
-        {'categoria': 'acidente', 'risco': 'Equipamento com defeito/sem manutenção', 'possiveis_danos': 'Falha do equipamento, acidentes, lesões.'},
-        {'categoria': 'acidente', 'risco': 'Explosão', 'possiveis_danos': 'Queimaduras, traumatismos, projeção de fragmentos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Incêndio', 'possiveis_danos': 'Queimaduras, inalação de fumaça, asfixia, morte.'},
-        {'categoria': 'acidente', 'risco': 'Impacto de objetos', 'possiveis_danos': 'Contusões, fraturas, lacerações.'},
-        {'categoria': 'acidente', 'risco': 'Máquinas e equipamentos sem proteção', 'possiveis_danos': 'Amputações, cortes, esmagamentos, prensamentos.'},
-        {'categoria': 'acidente', 'risco': 'Manuseio de produtos químicos sem EPI', 'possiveis_danos': 'Queimaduras químicas, irritações, intoxicações.'},
-        {'categoria': 'acidente', 'risco': 'Queda de altura', 'possiveis_danos': 'Fraturas, traumatismos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda em mesmo nível', 'possiveis_danos': 'Contusões, entorses, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Soterramento', 'possiveis_danos': 'Asfixia, traumatismos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Veículos em movimento', 'possiveis_danos': 'Atropelamento, colisão, esmagamento, morte.'},
-        {'categoria': 'acidente', 'risco': 'Agressão física', 'possiveis_danos': 'Lesões corporais, traumatismos, estresse psicológico.'},
-        {'categoria': 'acidente', 'risco': 'Animais (ataque de)', 'possiveis_danos': 'Mordidas, arranhões, infecções, reações alérgicas.'},
-        {'categoria': 'acidente', 'risco': 'Desabamento/colapso', 'possiveis_danos': 'Soterramento, esmagamento, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Exposição a temperaturas extremas', 'possiveis_danos': 'Hipotermia, hipertermia, queimaduras, insolação.'},
-        {'categoria': 'acidente', 'risco': 'Ferramentas manuais (uso inadequado)', 'possiveis_danos': 'Cortes, perfurações, contusões, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Incêndio/explosão', 'possiveis_danos': 'Queimaduras, inalação de fumaça, traumatismos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Objetos cortantes/perfurocortantes', 'possiveis_danos': 'Cortes, perfurações, lacerações, infecções.'},
-        {'categoria': 'acidente', 'risco': 'Produtos químicos (derramamento/vazamento)', 'possiveis_danos': 'Queimaduras químicas, irritações, intoxicações, problemas respiratórios.'},
-        {'categoria': 'acidente', 'risco': 'Queda de objetos', 'possiveis_danos': 'Impacto, contusões, fraturas, traumatismos.'},
-        {'categoria': 'acidente', 'risco': 'Ruído excessivo', 'possiveis_danos': 'Perda auditiva, zumbido, estresse.'},
-        {'categoria': 'acidente', 'risco': 'Superfícies escorregadias/irregulares', 'possiveis_danos': 'Quedas, contusões, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho em altura', 'possiveis_danos': 'Quedas, fraturas, traumatismos, morte.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho em espaço confinado', 'possiveis_danos': 'Asfixia, intoxicação, desmaio, morte.'},
-        {'categoria': 'acidente', 'risco': 'Veículos e máquinas (operação)', 'possiveis_danos': 'Atropelamento, colisão, esmagamento, amputações, morte.'},
-        {'categoria': 'biologico', 'risco': 'Vírus, bactérias, fungos, parasitas', 'possiveis_danos': 'Infecções, doenças, reações alérgicas.'},
-        {'categoria': 'ergonomico', 'risco': 'Posturas inadequadas', 'possiveis_danos': 'Dores musculares, lesões na coluna, LER/DORT.'},
-        {'categoria': 'ergonomico', 'risco': 'Repetitividade', 'possiveis_danos': 'LER/DORT, tendinites, síndrome do túnel do carpo.'},
-        {'categoria': 'ergonomico', 'risco': 'Levantamento e transporte manual de peso', 'possiveis_danos': 'Lesões musculoesqueléticas, dores na coluna.'},
-        {'categoria': 'fisico', 'risco': 'Ruído (contínuo ou intermitente)', 'possiveis_danos': 'Perda auditiva, zumbido, estresse, irritabilidade.'},
-        {'categoria': 'fisico', 'risco': 'Vibração (corpo inteiro)', 'possiveis_danos': 'Problemas na coluna, dores lombares.'},
-        {'categoria': 'fisico', 'risco': 'Vibração (mãos e braços)', 'possiveis_danos': 'Doenças osteomusculares, problemas circulatórios.'},
-        {'categoria': 'fisico', 'risco': 'Calor', 'possiveis_danos': 'Desidratação, insolação, cãibras, exaustão, intermação.'},
-        {'categoria': 'fisico', 'risco': 'Frio', 'possiveis_danos': 'Hipotermia, congelamento, doenças respiratórias.'},
-        {'categoria': 'fisico', 'risco': 'Radiações ionizantes', 'possiveis_danos': 'Câncer, mutações genéticas, queimaduras.'},
-        {'categoria': 'fisico', 'risco': 'Radiações não ionizantes', 'possiveis_danos': 'Queimaduras, lesões oculares, câncer de pele.'},
-        {'categoria': 'fisico', 'risco': 'Pressões anormais', 'possiveis_danos': 'Doença descompressiva, barotrauma.'},
-        {'categoria': 'fisico', 'risco': 'Umidade', 'possiveis_danos': 'Doenças respiratórias, dermatites, micoses.'},
-        {'categoria': 'quimico', 'risco': 'Poeiras', 'possiveis_danos': 'Pneumoconioses (silicose, asbestose), irritação respiratória.'},
-        {'categoria': 'quimico', 'risco': 'Fumos', 'possiveis_danos': 'Doenças respiratórias (febre dos fumos metálicos), intoxicações.'},
-        {'categoria': 'quimico', 'risco': 'Névoas', 'possiveis_danos': 'Irritação respiratória, dermatites.'},
-        {'categoria': 'quimico', 'risco': 'Gases', 'possiveis_danos': 'Asfixia, intoxicações, irritação respiratória.'},
-        {'categoria': 'quimico', 'risco': 'Vapores', 'possiveis_danos': 'Irritação respiratória, intoxicações, dermatites.'},
-        {'categoria': 'quimico', 'risco': 'Produtos químicos em geral', 'possiveis_danos': 'Queimaduras, irritações, intoxicações, dermatites, câncer.'},
-        {'categoria': 'acidente', 'risco': 'Animais peçonhentos e insetos', 'possiveis_danos': 'Ferimento, corte, contusão, reação alérgica, infecção, morte.'},
-        {'categoria': 'acidente', 'risco': 'Atropelamento', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Batida contra', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Choque elétrico', 'possiveis_danos': 'Queimadura de 1º, 2º ou 3º grau, fibrilação ventricular, morte.'},
-        {'categoria': 'acidente', 'risco': 'Contato com o sistema elétrico energizado.', 'possiveis_danos': 'Queimadura de 1º, 2º ou 3º grau, fibrilação ventricular, morte.'},
-        {'categoria': 'acidente', 'risco': 'Contato com ferramentas cortantes e/ou perfurantes.', 'possiveis_danos': 'Corte, laceração, ferida contusa, punctura (ferida aberta), perfuração.'},
-        {'categoria': 'acidente', 'risco': 'Contato com partes móveis de máquinas e equipamentos.', 'possiveis_danos': 'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.'},
-        {'categoria': 'acidente', 'risco': 'Contato com produtos químicos.', 'possiveis_danos': 'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.'},
-        {'categoria': 'acidente', 'risco': 'Contato com substância cáustica, tóxica ou nociva.', 'possiveis_danos': 'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.'},
-        {'categoria': 'acidente', 'risco': 'Ingestão de substância cáustica, tóxica ou nociva.', 'possiveis_danos': 'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.'},
-        {'categoria': 'acidente', 'risco': 'Inalação, ingestão e/ou absorção.', 'possiveis_danos': 'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.'},
-        {'categoria': 'acidente', 'risco': 'Incêndio/Explosão', 'possiveis_danos': 'Queimadura de 1º, 2º ou 3º grau, asfixia,  arremessos, cortes, escoriações, luxações, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Objetos cortantes/perfurocortantes', 'possiveis_danos': 'Corte, laceração, ferida contusa, punctura (ferida aberta), perfuração.'},
-        {'categoria': 'acidente', 'risco': 'Pessoas não autorizadas e/ou visitantes no local de trabalho', 'possiveis_danos': 'Escoriação, ferimento, corte, luxação, fratura, entre outros danos devido às características do local e atividades realizadas.'},
-        {'categoria': 'acidente', 'risco': 'Portas, escotilhas, tampas, "bocas de visita", flanges', 'possiveis_danos': 'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações, exposição à gases tóxicos.'},
-        {'categoria': 'acidente', 'risco': 'Projeção de Partículas sólidas e/ou líquidas', 'possiveis_danos': 'Ferimento, corte, queimadura, perfuração, intoxicação.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível de andaime, passarela, plataforma, etc.', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível de escada (móvel ou fixa).', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível de material empilhado.', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível de veículo.', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível em poço, escavação, abertura no piso, etc.', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível ≤ 2m', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa com diferença de nível > 2m', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas, morte.'},
-        {'categoria': 'acidente', 'risco': 'Queda de pessoa em mesmo nível', 'possiveis_danos': 'Escoriações, ferimentos, cortes, luxações, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Reação do corpo a seus movimentos (escorregão sem queda, etc.)', 'possiveis_danos': 'Torções, distensções, rupturas ou outras lesões musculares internas.'},
-        {'categoria': 'acidente', 'risco': 'Vidro (recipientes, portas, bancadas, janelas, objetos diversos).', 'possiveis_danos': 'Corte, ferimento, perfuração.'},
-        {'categoria': 'acidente', 'risco': 'Soterramento', 'possiveis_danos': 'Asfixia, desconforto respiratório, nível de consciência alterado, letargia, palidez, pele azulada, tosse, transtorno neurológico.'},
-        {'categoria': 'acidente', 'risco': 'Substâncias tóxicas e/ou inflamáveis', 'possiveis_danos': 'Intoxicação, asfixia, queimaduras de  1º, 2º ou 3º grau.'},
-        {'categoria': 'acidente', 'risco': 'Superfícies, substâncias e/ou objetos aquecidos ', 'possiveis_danos': 'Queimadura de 1º, 2º ou 3º grau.'},
-        {'categoria': 'acidente', 'risco': 'Superfícies, substâncias e/ou objetos em baixa temperatura ', 'possiveis_danos': 'Queimadura de 1º, 2º ou 3º grau.'},
-        {'categoria': 'acidente', 'risco': 'Tombamento, quebra e/ou ruptura de estrutura (fixa ou móvel)', 'possiveis_danos': 'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.'},
-        {'categoria': 'acidente', 'risco': 'Tombamento de máquina/equipamento', 'possiveis_danos': 'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho à céu aberto', 'possiveis_danos': 'Intermação, insolação, cãibra, exaustão, desidratação, resfriados.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho em espaços confinados', 'possiveis_danos': 'Asfixia, hiperóxia, contaminação por poeiras e/ou gases tóxicos, queimadura de 1º, 2º ou 3º grau, arremessos, cortes, escoriações, luxações, fraturas.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho com máquinas portáteis rotativas.', 'possiveis_danos': 'Cortes, ferimentos, escoriações, amputações.'},
-        {'categoria': 'acidente', 'risco': 'Trabalho com máquinas e/ou equipamentos', 'possiveis_danos': 'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações, choque elétrico.'}
-    ]
-    return pd.DataFrame(data)
-
-def substituir_placeholders(doc, contexto):
-    """
-    Substitui placeholders preservando a formatação do template.
-    """
-    def aplicar_formatacao_padrao(run):
-        """Aplica formatação Segoe UI 9pt"""
-        run.font.name = 'Segoe UI'
-        run.font.size = Pt(9)
-        return run
-
-    def processar_paragrafo(p):
-        texto_original_paragrafo = p.text
-
-        # --- Lógica CORRIGIDA E MANTIDA para [MEDIÇÕES] ---
-        if "[MEDIÇÕES]" in texto_original_paragrafo:
-            for run in p.runs:
-                run.text = ''
-            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            medicoes_valor = contexto.get("[MEDIÇÕES]", "Não aplicável")
-            if medicoes_valor == "Não aplicável" or not medicoes_valor.strip():
-                run = aplicar_formatacao_padrao(p.add_run("Não aplicável"))
-                run.font.bold = False
-            else:
-                linhas = medicoes_valor.split('\n')
-                for i, linha in enumerate(linhas):
-                    if not linha.strip(): continue
-                    if i > 0: p.add_run().add_break()
-                    if ":" in linha:
-                        partes = linha.split(":", 1)
-                        agente_texto = partes[0].strip() + ":"
-                        valor_texto = partes[1].strip()
-                        run_agente = aplicar_formatacao_padrao(p.add_run(agente_texto + " "))
-                        run_agente.font.bold = True
-                        run_valor = aplicar_formatacao_padrao(p.add_run(valor_texto))
-                        run_valor.font.bold = False
-                    else:
-                        run_simples = aplicar_formatacao_padrao(p.add_run(linha))
-                        run_simples.font.bold = False
-            return
-
-        # --- Lógica RESTAURADA E CORRIGIDA para outros placeholders ---
-        placeholders_no_paragrafo = [key for key in contexto if key in texto_original_paragrafo]
-        if not placeholders_no_paragrafo:
-            return
-
-        # Preserva o estilo do primeiro 'run', que geralmente define o estilo do rótulo no template
-        estilo_rotulo = {
-            'bold': p.runs[0].bold if p.runs else False,
-            'italic': p.runs[0].italic if p.runs else False,
-            'underline': p.runs[0].underline if p.runs else False,
-        }
-
-        # Substitui todos os placeholders para obter o texto final
-        texto_final = texto_original_paragrafo
-        for key in placeholders_no_paragrafo:
-            texto_final = texto_final.replace(key, str(contexto[key]))
-        
-        # Limpa o parágrafo para reescrevê-lo com a formatação correta
-        p.clear()
-
-        # Reconstrói o parágrafo, aplicando o estilo do rótulo e deixando os valores sem formatação
-        texto_restante = texto_final
-        for i, key in enumerate(placeholders_no_paragrafo):
-            valor_placeholder = str(contexto[key])
-            partes = texto_restante.split(valor_placeholder, 1)
-            
-            # Adiciona o texto antes do valor (que é o rótulo) com o estilo preservado
-            if partes[0]:
-                run_rotulo = aplicar_formatacao_padrao(p.add_run(partes[0]))
-                run_rotulo.font.bold = estilo_rotulo['bold']
-                run_rotulo.font.italic = estilo_rotulo['italic']
-                run_rotulo.underline = estilo_rotulo['underline']
-
-            # Adiciona o valor do placeholder sem formatação
-            run_valor = aplicar_formatacao_padrao(p.add_run(valor_placeholder))
-            run_valor.font.bold = False
-            run_valor.font.italic = False
-            run_valor.font.underline = False
-            
-            texto_restante = partes[1]
-
-        # Adiciona qualquer texto que sobrar no final, com o estilo do rótulo
-        if texto_restante:
-            run_final = aplicar_formatacao_padrao(p.add_run(texto_restante))
-            run_final.font.bold = estilo_rotulo['bold']
-            run_final.font.italic = estilo_rotulo['italic']
-            run_final.underline = estilo_rotulo['underline']
-
-    # Processar parágrafos em tabelas e no corpo do documento
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    processar_paragrafo(p)
-    for p in doc.paragraphs:
-        processar_paragrafo(p)
-
-
-def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
-    doc = Document(modelo_doc_carregado)
-    riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
-    riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-
-    # Processar riscos selecionados
-    for _, risco_row in riscos_info.iterrows():
-        categoria = str(risco_row.get("categoria", "")).lower()
-        if categoria in riscos_por_categoria:
-            riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
-            danos = risco_row.get("possiveis_danos")
-            if pd.notna(danos): 
-                danos_por_categoria[categoria].append(str(danos))
-
-    # Processar riscos manuais
-    if riscos_manuais:
-        map_categorias_rev = {v: k for k, v in CATEGORIAS_RISCO.items()}
-        for risco_manual in riscos_manuais:
-            categoria_display = risco_manual.get('category')
-            categoria_alvo = map_categorias_rev.get(categoria_display)
-            if categoria_alvo:
-                riscos_por_categoria[categoria_alvo].append(risco_manual.get('risk_name', ''))
-                if risco_manual.get('possible_damages'):
-                    danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
-
-    # Limpar duplicatas
-    for cat in danos_por_categoria:
-        danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
-
-    # FORMATAÇÃO SIMPLES DAS MEDIÇÕES
-    medicoes_formatadas = []
-    for med in medicoes_manuais:
-        agente = str(med.get('agent', '')).strip()
-        valor = str(med.get('value', '')).strip()
-        unidade = str(med.get('unit', '')).strip()
-       
-        if agente and agente not in ['', 'N/A', 'nan', 'None'] and valor and valor not in ['', 'N/A', 'nan', 'None']:
-            linha = f"{agente}: {valor}"
-            if unidade and unidade not in ['', 'N/A', 'nan', 'None']:
-                linha += f" {unidade}"
-            if epi and epi not in ['', 'N/A', 'nan', 'None']:
-                linha += f" | EPI: {epi}"
-            medicoes_formatadas.append(linha)
-    medicoes_texto = "\n".join(medicoes_formatadas) if medicoes_formatadas else "Não aplicável"
-
-    # Processar data de admissão
-    data_admissao = "Não informado"
-    if 'data_de_admissao' in funcionario and pd.notna(funcionario['data_de_admissao']):
-        try: 
-            data_admissao = pd.to_datetime(funcionario['data_de_admissao']).strftime('%d/%m/%Y')
-        except Exception: 
-            data_admissao = str(funcionario['data_de_admissao'])
-    elif 'Data de Admissão' in funcionario and pd.notna(funcionario['Data de Admissão']):
-        try: 
-            data_admissao = pd.to_datetime(funcionario['Data de Admissão']).strftime('%d/%m/%Y')
-        except Exception: 
-            data_admissao = str(funcionario['Data de Admissão'])
-
-    # Processar descrição de atividades
-    descricao_atividades = "Não informado"
-    if 'descricao_de_atividades' in funcionario and pd.notna(funcionario['descricao_de_atividades']):
-        descricao_atividades = str(funcionario['descricao_de_atividades']).strip()
-    elif 'Descrição de Atividades' in funcionario and pd.notna(funcionario['Descrição de Atividades']):
-        descricao_atividades = str(funcionario['Descrição de Atividades']).strip()
-
-    if descricao_atividades == "Não informado" or descricao_atividades == "" or descricao_atividades == "nan":
-        funcao = str(funcionario.get('funcao', funcionario.get('Função', 'N/A')))
-        setor = str(funcionario.get('setor', funcionario.get('Setor', 'N/A')))
-        if funcao != 'N/A' and setor != 'N/A':
-            descricao_atividades = f"Atividades relacionadas à função de {funcao} no setor {setor}, incluindo todas as tarefas operacionais, administrativas e de apoio inerentes ao cargo."
-        else:
-            descricao_atividades = "Atividades operacionais, administrativas e de apoio conforme definido pela chefia imediata."
-
-    def tratar_lista_vazia(lista, separador=", "):
-        if not lista or all(not item.strip() for item in lista): 
-            return "Não identificado"
-        return separador.join(sorted(list(set(item for item in lista if item and item.strip()))))
-
-    # Contexto
-    contexto = {
-        "[NOME EMPRESA]": str(funcionario.get("empresa", funcionario.get("Empresa", "N/A"))), 
-        "[UNIDADE]": str(funcionario.get("unidade", funcionario.get("Unidade", "N/A"))),
-        "[NOME FUNCIONÁRIO]": str(funcionario.get("nome_do_funcionario", funcionario.get("Nome", "N/A"))), 
-        "[DATA DE ADMISSÃO]": data_admissao,
-        "[SETOR]": str(funcionario.get("setor", funcionario.get("Setor", "N/A"))), 
-        "[FUNÇÃO]": str(funcionario.get("funcao", funcionario.get("Função", "N/A"))),
-        "[DESCRIÇÃO DE ATIVIDADES]": descricao_atividades,
-        "[RISCOS FÍSICOS]": tratar_lista_vazia(riscos_por_categoria["fisico"]),
-        "[RISCOS DE ACIDENTE]": tratar_lista_vazia(riscos_por_categoria["acidente"]),
-        "[RISCOS QUÍMICOS]": tratar_lista_vazia(riscos_por_categoria["quimico"]),
-        "[RISCOS BIOLÓGICOS]": tratar_lista_vazia(riscos_por_categoria["biologico"]),
-        "[RISCOS ERGONÔMICOS]": tratar_lista_vazia(riscos_por_categoria["ergonomico"]),
-        "[POSSÍVEIS DANOS RISCOS FÍSICOS]": tratar_lista_vazia(danos_por_categoria["fisico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ACIDENTE]": tratar_lista_vazia(danos_por_categoria["acidente"], "; "),
-        "[POSSÍVEIS DANOS RISCOS QUÍMICOS]": tratar_lista_vazia(danos_por_categoria["quimico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
-        "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
-        "[MEDIÇÕES]": medicoes_texto,
-    }
-
-    substituir_placeholders(doc, contexto)
+    
+    for tipo_risco, riscos in riscos_data.items():
+        if riscos.strip():
+            para = doc.add_paragraph()
+            para.add_run(f"➤ {tipo_risco}: ").bold = True
+            para.add_run(danos_mapping.get(tipo_risco, 'Possíveis danos relacionados a este tipo de risco'))
+    
+    # Meios de prevenção e controle
+    heading = doc.add_heading('MEIOS PARA PREVENIR E CONTROLAR RISCOS - NR01 item 1.4.4 b)', level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    doc.add_paragraph(medidas_data.get('prevencao', 'Seguir rigorosamente os procedimentos de segurança estabelecidos pela empresa.'))
+    
+    # Medidas adotadas pela empresa
+    heading = doc.add_heading("MEDIDAS ADOTADAS PELA EMPRESA - NR01 item 1.4.1 b) II / item 1.4.4 c)", level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    
+    epi_para = doc.add_paragraph()
+    epi_para.add_run("EPI Obrigatórios: ").bold = True
+    epi_text = medidas_data.get("epi", "Conforme necessidade da função e análise de riscos")
+    epi_para.add_run(epi_text)
+    
+    # Medidas da empresa (movido para evitar NameError)
+    doc.add_paragraph(medidas_data.get("empresa", 
+        "Treinamentos periódicos, supervisão constante, fornecimento e exigência de uso de EPIs, "
+        "manutenção preventiva de equipamentos, monitoramento do ambiente de trabalho, "
+        "exames médicos ocupacionais conforme PCMSO."))
+    # Avaliações ambientais
+    heading = doc.add_heading("AVALIAÇÕES AMBIENTAIS - NR01 item 1.4.1 b) IV", level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    doc.add_paragraph(avaliacoes_data.get("medicoes", 
+        "As avaliações ambientais são realizadas conforme cronograma estabelecido pelo PPRA/PGR, "
+        "com medições de agentes físicos, químicos e biológicos quando aplicável."))
+    
+    # Procedimentos de emergência
+    heading = doc.add_heading('PROCEDIMENTOS EM SITUAÇÕES DE EMERGÊNCIA - NR01 item 1.4.4 d) / item 1.4.1 e)', level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    
+    emergencia_text = """• Comunique imediatamente o acidente à chefia imediata ou pessoa designada;
+• Preserve as condições do local de acidente até comunicação com autoridade competente;
+• Em caso de ferimento, procure o ambulatório médico ou primeiros socorros;
+• Siga as orientações do Plano de Emergência da empresa;
+• Participe dos treinamentos de abandono e emergência."""
+    
+    doc.add_paragraph(emergencia_text)
+    
+    # Grave e iminente risco
+    heading = doc.add_heading('ORIENTAÇÕES SOBRE GRAVE E IMINENTE RISCO - NR01 item 1.4.4 e) / item 1.4.3', level=2)
+    heading.runs[0].font.size = Inches(0.12)
+    
+    gir_text = """• Sempre que constatar situação de Grave e Iminente Risco, interrompa imediatamente as atividades;
+• Informe imediatamente ao seu superior hierárquico ou responsável pela área;
+• Registre a ocorrência conforme procedimento estabelecido pela empresa;
+• Aguarde as providências e liberação formal para retorno às atividades;
+• Todo empregado tem o direito de recusar trabalho em condições de risco grave e iminente."""
+    
+    doc.add_paragraph(gir_text)
+    
+    doc.add_paragraph()  # Espaço
+    
+    # Nota legal
+    nota_para = doc.add_paragraph()
+    nota_run = nota_para.add_run(
+        "IMPORTANTE: Conforme Art. 158 da CLT e NR-01 item 1.4.2.1, o descumprimento das "
+        "disposições legais sobre segurança e saúde no trabalho sujeita o empregado às "
+        "penalidades legais, inclusive demissão por justa causa."
+    )
+    nota_run.bold = True
+    
+    doc.add_paragraph()  # Espaço
+    
+    # Assinaturas
+    doc.add_paragraph("_" * 40 + "\t\t" + "_" * 40)
+    doc.add_paragraph("Funcionário\t\t\t\t\tResponsável pela Área")
+    doc.add_paragraph(f"Data: {datetime.date.today().strftime('%d/%m/%Y')}")
+    
     return doc
 
-# --- APLICAÇÃO PRINCIPAL ---
 def main():
-    check_authentication()
-    init_user_session_state()
+    # Título principal
+    st.markdown('<h1 class="main-title">📋 Gerador de Ordem de Serviço - NR01</h1>', 
+                unsafe_allow_html=True)
     
-    if not st.session_state.get('authenticated'):
-        show_login_page()
-        return
+    # Sidebar com informações
+    with st.sidebar:
+        st.markdown("### 🛡️ Sistema de OS - NR01")
+        st.markdown("---")
+        
+        st.markdown("### 📋 Como usar:")
+        st.markdown("""
+        1. **Upload** da planilha de funcionários
+        2. **Selecione** o funcionário
+        3. **Configure** os riscos e medidas
+        4. **Gere** a Ordem de Serviço
+        """)
+        
+        st.markdown("### 📁 Estrutura da Planilha:")
+        st.markdown("""
+        **Colunas obrigatórias:**
+        - Nome
+        - Setor
+        - Função
+        - Data de Admissão
+        - Empresa
+        - Unidade
+        - Descrição de Atividades
+        """)
+        
+        # Botão para baixar exemplo
+        sample_df = create_sample_data()
+        sample_buffer = BytesIO()
+        sample_df.to_excel(sample_buffer, index=False)
+        sample_buffer.seek(0)
+        
+        st.download_button(
+            "📥 Baixar Planilha Exemplo",
+            data=sample_buffer.getvalue(),
+            file_name="modelo_funcionarios.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
     
-    user_id = st.session_state.user_data['user_id']
-    show_user_info()
+    # Área de upload
+    st.markdown('<div class="upload-area">', unsafe_allow_html=True)
+    st.markdown("### 📤 Upload da Planilha de Funcionários")
     
-    st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        st.markdown("##### 📂 1. Carregue os Documentos")
-        col1, col2 = st.columns(2)
-        with col1:
-            arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx")
-        with col2:
-            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
-
-    if not arquivo_funcionarios or not arquivo_modelo_os:
-        st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
-        return
+    uploaded_file = st.file_uploader(
+        "Selecione sua planilha Excel (.xlsx)",
+        type=['xlsx'],
+        help="A planilha deve conter as colunas: Nome, Setor, Função, Data de Admissão, Empresa, Unidade, Descrição de Atividades"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
-    if df_funcionarios_raw is None:
-        st.stop()
-
-    df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
-    df_pgr = obter_dados_pgr()
-
-    with st.container(border=True):
-        st.markdown('##### 👥 2. Selecione os Funcionários')
-        setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
-        setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
-        df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
-        funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
-        funcoes_formatadas = []
-        if setor_sel:
-            for funcao in funcoes_disponiveis:
-                concluido = all((s, funcao) in st.session_state.cargos_concluidos for s in setor_sel)
-                if concluido:
-                    funcoes_formatadas.append(f"{funcao} ✅ Concluído")
+    if uploaded_file is not None:
+        try:
+            # Carregar dados
+            df = pd.read_excel(uploaded_file)
+            
+            # Validar estrutura
+            is_valid, message = validate_excel_structure(df)
+            
+            if not is_valid:
+                st.error(f"❌ {message}")
+                st.info("💡 Use a planilha exemplo como modelo para estruturar seus dados corretamente.")
+                return
+            
+            st.success(f"✅ Planilha carregada com sucesso! {len(df)} funcionários encontrados.")
+            
+            # Layout principal em colunas
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.markdown('<div class="section-header">👤 Seleção do Funcionário</div>', 
+                            unsafe_allow_html=True)
+                
+                # Filtros
+                setores = ['Todos'] + sorted(df['Setor'].dropna().unique().tolist())
+                setor_selecionado = st.selectbox("🏢 Filtrar por Setor:", setores)
+                
+                if setor_selecionado != 'Todos':
+                    df_filtrado = df[df['Setor'] == setor_selecionado]
                 else:
-                    funcoes_formatadas.append(funcao)
-        else:
-            funcoes_formatadas = funcoes_disponiveis
-        funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
-        funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
-        df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
-        st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
-        st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
-
-    with st.container(border=True):
-        st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
-        st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
-        riscos_selecionados = []
-        nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
-        tabs = st.tabs(nomes_abas)
-        for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
-            with tabs[i]:
-                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
-                selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
-                riscos_selecionados.extend(selecionados)
-        with tabs[-1]:
-            with st.form("form_risco_manual", clear_on_submit=True):
-                st.markdown("###### Adicionar um Risco que não está na lista")
-                risco_manual_nome = st.text_input("Descrição do Risco")
-                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
-                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
-                if st.form_submit_button("Adicionar Risco Manual"):
-                    if risco_manual_nome and categoria_manual:
-                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-            if st.session_state.riscos_manuais_adicionados:
-                st.write("**Riscos manuais salvos:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    col1, col2 = st.columns([4, 1])
-                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
-                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
-                        user_data_manager.remove_manual_risk(user_id, r['id'])
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-        
-        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
-        if total_riscos > 0:
-            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
-                    if not categoria_key_series.empty:
-                        categoria_key = categoria_key_series.iloc[0]
-                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
-                        if categoria_display:
-                            riscos_para_exibir[categoria_display].append(risco_nome)
-                for risco_manual in st.session_state.riscos_manuais_adicionados:
-                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
-                for categoria, lista_riscos in riscos_para_exibir.items():
-                    if lista_riscos:
-                        st.markdown(f"**{categoria}**")
-                        for risco in sorted(list(set(lista_riscos))):
-                            st.markdown(f"- {risco}")
-        
-        st.divider()
-
-        col_exp1, col_exp2 = st.columns(2)
-        with col_exp1:
-            with st.expander("📊 **Adicionar Medições**"):
-                with st.form("form_medicao", clear_on_submit=True):
-                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
-                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
-                    agente_manual = st.text_input("...ou digite um novo aqui:")
-                    valor = st.text_input("Valor Medido")
-                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
-                    epi_med = st.text_input("EPI Associado (Opcional)")
-                    if st.form_submit_button("Adicionar Medição"):
-                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
-                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
-                            user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                        else:
-                            st.warning("Por favor, preencha o Agente e o Valor.")
-                if st.session_state.medicoes_adicionadas:
-                    st.write("**Medições salvas:**")
-                    for med in st.session_state.medicoes_adicionadas:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {med['agent']}: {med['value']} {med['unit']}")
-                        if col2.button("Remover", key=f"rem_med_{med['id']}"):
-                            user_data_manager.remove_measurement(user_id, med['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-        with col_exp2:
-            with st.expander("🦺 **Adicionar EPIs Gerais**"):
-                with st.form("form_epi", clear_on_submit=True):
-                    epi_nome = st.text_input("Nome do EPI")
-                    if st.form_submit_button("Adicionar EPI"):
-                        if epi_nome:
-                            user_data_manager.add_epi(user_id, epi_nome)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                if st.session_state.epis_adicionados:
-                    st.write("**EPIs salvos:**")
-                    for epi in st.session_state.epis_adicionados:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {epi['epi_name']}")
-                        if col2.button("Remover", key=f"rem_epi_{epi['id']}"):
-                            user_data_manager.remove_epi(user_id, epi['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-
-    st.divider()
-    if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
-        with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
-            documentos_gerados = []
-            combinacoes_processadas = set()
-            for _, func in df_final_filtrado.iterrows():
-                combinacoes_processadas.add((func['setor'], func['funcao']))
-                doc = gerar_os(
-                    func, 
-                    df_pgr, 
-                    riscos_selecionados, 
-                    st.session_state.epis_adicionados,
-                    st.session_state.medicoes_adicionadas, 
-                    st.session_state.riscos_manuais_adicionados, 
-                    arquivo_modelo_os
+                    df_filtrado = df
+                
+                # Seleção do funcionário
+                funcionarios = [''] + df_filtrado['Nome'].dropna().unique().tolist()
+                funcionario_selecionado = st.selectbox("👤 Selecionar Funcionário:", funcionarios)
+                
+                if funcionario_selecionado:
+                    funcionario_info = df_filtrado[df_filtrado['Nome'] == funcionario_selecionado].iloc[0]
+                    
+                    # Exibir informações do funcionário
+                    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+                    st.markdown(f"**👤 Nome:** {funcionario_info['Nome']}")
+                    st.markdown(f"**🏢 Setor:** {funcionario_info['Setor']}")
+                    st.markdown(f"**💼 Função:** {funcionario_info['Função']}")
+                    st.markdown(f"**🏭 Empresa:** {funcionario_info['Empresa']}")
+                    st.markdown(f"**📍 Unidade:** {funcionario_info['Unidade']}")
+                    st.markdown(f"**📅 Admissão:** {funcionario_info['Data de Admissão']}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown('<div class="section-header">⚠️ Agentes de Riscos Ocupacionais</div>', 
+                            unsafe_allow_html=True)
+                
+                # Riscos ocupacionais com exemplos
+                riscos = {}
+                riscos['Físico'] = st.text_area(
+                    "🔊 Riscos Físicos:", 
+                    placeholder="Ex: Ruído acima de 85dB, vibração, temperaturas extremas, radiação",
+                    height=60
                 )
-                doc_io = BytesIO()
-                doc.save(doc_io)
-                doc_io.seek(0)
-                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
-                caminho_no_zip = f"{func.get('setor', 'SemSetor')}/{func.get('funcao', 'SemFuncao')}/OS_{nome_limpo}.docx"
-                documentos_gerados.append((caminho_no_zip, doc_io.getvalue()))
-            st.session_state.cargos_concluidos.update(combinacoes_processadas)
-            if documentos_gerados:
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for nome_arquivo, conteudo_doc in documentos_gerados:
-                        zip_file.writestr(nome_arquivo, conteudo_doc)
-                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
-                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
-                st.download_button(
-                    label="📥 Baixar Todas as OS (.zip)", 
-                    data=zip_buffer.getvalue(), 
-                    file_name=nome_arquivo_zip, 
-                    mime="application/zip",
-                    use_container_width=True
+                riscos['Químico'] = st.text_area(
+                    "🧪 Riscos Químicos:", 
+                    placeholder="Ex: Solventes, ácidos, gases, vapores, poeiras químicas",
+                    height=60
                 )
+                riscos['Acidente'] = st.text_area(
+                    "⚠️ Riscos de Acidente:", 
+                    placeholder="Ex: Máquinas sem proteção, eletricidade, trabalho em altura",
+                    height=60
+                )
+                riscos['Ergonômico'] = st.text_area(
+                    "🦴 Riscos Ergonômicos:", 
+                    placeholder="Ex: Levantamento de peso, postura inadequada, movimentos repetitivos",
+                    height=60
+                )
+                riscos['Biológico'] = st.text_area(
+                    "🦠 Riscos Biológicos:", 
+                    placeholder="Ex: Vírus, bactérias, fungos, parasitas",
+                    height=60
+                )
+            
+            # Segunda linha de colunas
+            col3, col4 = st.columns([1, 1])
+            
+            with col3:
+                st.markdown('<div class="section-header">🛡️ Medidas de Proteção e Controle</div>', 
+                            unsafe_allow_html=True)
+                
+                medidas = {}
+                medidas['epi'] = st.text_area(
+                    "🥽 EPIs Obrigatórios:", 
+                    placeholder="Ex: Capacete, óculos de proteção, luvas, calçado de segurança, protetor auricular",
+                    height=80
+                )
+                medidas['prevencao'] = st.text_area(
+                    "🔒 Medidas de Prevenção:", 
+                    placeholder="Ex: Treinamentos, procedimentos operacionais, supervisão, manutenção preventiva",
+                    height=80
+                )
+                medidas['empresa'] = st.text_area(
+                    "🏢 Medidas da Empresa:", 
+                    placeholder="Ex: CIPA, SIPAT, controle médico, monitoramento ambiental",
+                    height=80
+                )
+            
+            with col4:
+                st.markdown('<div class="section-header">📊 Avaliações e Informações</div>', 
+                            unsafe_allow_html=True)
+                
+                avaliacoes = {}
+                avaliacoes['medicoes'] = st.text_area(
+                    "📈 Avaliações Ambientais:", 
+                    placeholder="Ex: Dosimetria de ruído: 82dB / Iluminação: 300 lux / Calor: IBUTG 25°C",
+                    height=100
+                )
+                
+                # Data da OS
+                data_os = st.date_input("📅 Data da Ordem de Serviço:", datetime.date.today())
+            
+            # Botão para gerar OS
+            if funcionario_selecionado:
+                st.markdown("---")
+                col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+                
+                with col_btn2:
+                    if st.button("📄 GERAR ORDEM DE SERVIÇO", use_container_width=True, type="primary"):
+                        try:
+                            # Preparar dados do funcionário
+                            funcionario_data = {
+                                'Nome': funcionario_info['Nome'],
+                                'Setor': funcionario_info['Setor'],
+                                'Função': funcionario_info['Função'],
+                                'Empresa': funcionario_info['Empresa'],
+                                'Unidade': funcionario_info['Unidade'],
+                                'Data de Admissão': str(funcionario_info.get('Data de Admissão', 'A definir')),
+                                'Descrição de Atividades': funcionario_info.get('Descrição de Atividades', 
+                                                                              'Atividades relacionadas à função.')
+                            }
+                            
+                            # Criar documento
+                            doc = create_os_document(funcionario_data, riscos, medidas, avaliacoes)
+                            
+                            # Salvar em buffer
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+                            
+                            # Success message
+                            st.markdown('<div class="success-box">', unsafe_allow_html=True)
+                            st.markdown("### ✅ Ordem de Serviço Gerada com Sucesso!")
+                            st.markdown("O documento foi criado conforme os requisitos da NR-01 e está pronto para download.")
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            
+                            # Botão de download
+                            st.download_button(
+                                label="💾 📥 BAIXAR ORDEM DE SERVIÇO",
+                                data=buffer.getvalue(),
+                                file_name=f"OS_{funcionario_info['Nome'].replace(' ', '_')}_{data_os.strftime('%d%m%Y')}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                use_container_width=True
+                            )
+                            
+                        except Exception as e:
+                            st.error(f"❌ Erro ao gerar documento: {e}")
+                            st.exception(e)
+            
+            # Estatísticas da planilha
+            st.markdown("---")
+            st.markdown("### 📊 Estatísticas da Planilha Carregada")
+            
+            col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+            
+            with col_stat1:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("👥 Funcionários", len(df))
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col_stat2:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("🏢 Setores", df['Setor'].nunique())
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col_stat3:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("💼 Funções", df['Função'].nunique())
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with col_stat4:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("🏭 Unidades", df['Unidade'].nunique())
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+        except Exception as e:
+            st.error(f"❌ Erro ao processar planilha: {e}")
+            st.info("💡 Verifique se o arquivo está no formato Excel (.xlsx) e não está corrompido.")
+    
+    else:
+        # Instruções quando não há arquivo
+        st.markdown('<div class="info-box">', unsafe_allow_html=True)
+        st.markdown("### 🎯 Como começar:")
+        st.markdown("""
+        1. **📥 Baixe** a planilha exemplo na barra lateral
+        2. **✏️ Preencha** com os dados dos seus funcionários  
+        3. **📤 Faça upload** da planilha preenchida
+        4. **🎯 Selecione** um funcionário e configure os riscos
+        5. **📄 Gere** a Ordem de Serviço em formato Word
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="warning-box">', unsafe_allow_html=True)
+        st.markdown("### ⚠️ Importante:")
+        st.markdown("""
+        - A planilha deve estar no formato **.xlsx**
+        - Todas as colunas obrigatórias devem estar preenchidas
+        - Os dados devem estar organizados em linhas (cada funcionário = uma linha)
+        - Não deixe linhas vazias entre os dados
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
