@@ -181,25 +181,24 @@ def create_os_document(funcionario_data, riscos_data, medidas_data, avaliacoes_d
     doc.add_paragraph(medidas_data.get('prevencao', 'Seguir rigorosamente os procedimentos de segurança estabelecidos pela empresa.'))
     
     # Medidas adotadas pela empresa
-    heading = doc.add_heading("MEDIDAS ADOTADAS PELA EMPRESA - NR01 item 1.4.1 b) II / item 1.4.4 c)", level=2)
+    heading = doc.add_heading('MEDIDAS ADOTADAS PELA EMPRESA - NR01 item 1.4.1 b) II / item 1.4.4 c)', level=2)
     heading.runs[0].font.size = Inches(0.12)
     
     epi_para = doc.add_paragraph()
     epi_para.add_run("EPI Obrigatórios: ").bold = True
-    epi_text = medidas_data.get("epi", "Conforme necessidade da função e análise de riscos")
-    epi_para.add_run(epi_text)
+    epi_para.add_run(medidas_data.get('epi', 'Conforme necessidade da função e análise de riscos'))
     
-    # Medidas da empresa (movido para evitar NameError)
-    doc.add_paragraph(medidas_data.get("empresa", 
-        "Treinamentos periódicos, supervisão constante, fornecimento e exigência de uso de EPIs, "
-        "manutenção preventiva de equipamentos, monitoramento do ambiente de trabalho, "
-        "exames médicos ocupacionais conforme PCMSO."))
+    doc.add_paragraph(medidas_data.get('empresa', 
+        'Treinamentos periódicos, supervisão constante, fornecimento e exigência de uso de EPIs, '
+        'manutenção preventiva de equipamentos, monitoramento do ambiente de trabalho, '
+        'exames médicos ocupacionais conforme PCMSO.'))
+    
     # Avaliações ambientais
-    heading = doc.add_heading("AVALIAÇÕES AMBIENTAIS - NR01 item 1.4.1 b) IV", level=2)
+    heading = doc.add_heading('AVALIAÇÕES AMBIENTAIS - NR01 item 1.4.1 b) IV', level=2)
     heading.runs[0].font.size = Inches(0.12)
-    doc.add_paragraph(avaliacoes_data.get("medicoes", 
-        "As avaliações ambientais são realizadas conforme cronograma estabelecido pelo PPRA/PGR, "
-        "com medições de agentes físicos, químicos e biológicos quando aplicável."))
+    doc.add_paragraph(avaliacoes_data.get('medicoes', 
+        'As avaliações ambientais são realizadas conforme cronograma estabelecido pelo PPRA/PGR, '
+        'com medições de agentes físicos, químicos e biológicos quando aplicável.'))
     
     # Procedimentos de emergência
     heading = doc.add_heading('PROCEDIMENTOS EM SITUAÇÕES DE EMERGÊNCIA - NR01 item 1.4.4 d) / item 1.4.1 e)', level=2)
