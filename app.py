@@ -33,6 +33,342 @@ AGENTES_DE_RISCO = sorted([
     "Protozoários", "Fungos", "Parasitas", "Bacilos"
 ])
 CATEGORIAS_RISCO = {'fisico': '🔥 Físicos', 'quimico': '⚗️ Químicos', 'biologico': '🦠 Biológicos', 'ergonomico': '🏃 Ergonômicos', 'acidente': '⚠️ Acidentes'}
+# Dados dos Riscos baseados na planilha PGR
+RISCOS_PGR_DADOS = {
+    'quimico': {
+        'riscos': [
+            'Exposição a Produto Químico',
+        ],
+        'danos': [
+            'Irritação/lesão ocular, na pele e mucosas; Dermatites; Queimadura Química; Intoxicação; Náuseas; Vômitos.',
+        ]
+    },
+    'fisico': {
+        'riscos': [
+            'Ambiente Artificialmente Frio',
+            'Exposição ao Ruído',
+            'Vibrações Localizadas (mão/braço)',
+            'Vibração de Corpo Inteiro (AREN)',
+            'Vibração de Corpo Inteiro (VDVR)',
+            'Exposição à Radiações Ionizantes',
+            'Exposição à Radiações Não-ionizantes',
+            'Exposição à Temperatura Ambiente Elevada',
+            'Exposição à Temperatura Ambiente Baixa',
+            'Pressão Atmosférica Anormal (condições hiperbáricas)',
+            'Umidade',
+        ],
+        'danos': [
+            'Estresse, desconforto, dormência, rigidez nas partes com maior intensidade de exposição ao frio, redução da destreza, formigamento, redução da sensibilidade dos dedos e flexibilidade das articulações.',
+            'Perda Auditiva Induzida pelo Ruído Ocupacional (PAIRO).',
+            'Alterações articulares e vasomotoras.',
+            'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.',
+            'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.',
+            'Dano às células do corpo humano, causando doenças graves, inclusive fatais, como câncer.',
+            'Depressão imunológica, fotoenvelhecimento, lesões oculares como ceratoconjuntivite, pterígio e catarata; Doenças graves, inclusives fatais, como câncer.',
+            'Desidratação, erupções cutâneas, cãibras, fadiga física, problemas cardiocirculatórios, distúrbios psicológicos.',
+            'Estresse, desconforto, dormência, rigidez nas partes com maior intensidade de exposição ao frio, redução da destreza, formigamento, redução da sensibilidade dos dedos e flexibilidade das articulações.',
+            'Barotrauma pulmonar, lesão de tecido pulmonar ou pneumotórax, embolia arterial gasosa, barotrauma de ouvido, barotrauma sinusal, barotrauma dental, barotrauma facial, doença descompressiva.',
+            'Doenças do aparelho respiratório, quedas, doenças de pele, doenças circulatórias, entre outras.',
+        ]
+    },
+    'biologico': {
+        'riscos': [
+            'Água e/ou alimentos contaminados',
+            'Contato com Fluido Orgânico (sangue, hemoderivados, secreções, excreções)',
+            'Contato com Pessoas Doentes e/ou Material Infectocontagiante',
+            'Contaminação pelo Corona Vírus',
+            'Exposição à Agentes Microbiológicos (fungos, bactérias, vírus, protozoários, parasitas)',
+        ],
+        'danos': [
+            'Intoxicação, diarreias, infecções intestinais.',
+            'Doenças infectocontagiosas.',
+            'Doenças infectocontagiosas.',
+            'COVID-19, podendo causar gripes, febre, tosse seca, cansaço, dores e desconfortos, dor de garganta, diarreia, perda de paladar ou olfato, dificuldade de respirar ou falta de ar, dor ou pressão no peito, perda de fala ou movimentos.',
+            'Doenças infectocontagiosas, dermatites, irritação, desconforto, infecção do sistema respiratório.',
+        ]
+    },
+    'ergonomico': {
+        'riscos': [
+            'Posturas incômodas/pouco confortáveis por longos períodos',
+            'Postura sentada por longos períodos',
+            'Postura em pé por longos períodos',
+            'Frequente deslocamento à pé durante à jornada de trabalho',
+            'Esforço físico intenso',
+            'Levantamento e transporte manual de cargas ou volumes',
+            'Frequente ação de empurrar/puxar cargas ou volumes',
+            'Frequente execução de movimentos repetitivos',
+            'Manuseio de ferramentas e/ou objetos pesados por longos períodos',
+            'Uso frequente de força, pressão, preensão, flexão, extensão ou torção dos segmentos corporais',
+            'Compressão de partes do corpo por superfícies rígidas ou com quinas vivas',
+            'Flexões da coluna vertebral frequentes',
+            'Uso frequente de pedais',
+            'Uso frequente de alavancas',
+            'Elevação frequente de membros superiores',
+            'Manuseio ou movimentação de cargas e volumes sem pega ou com \"pega pobre\"',
+            'Exposição à vibração de corpo inteiro',
+            'Exposição à vibrações localizadas (mão, braço)',
+            'Uso frequente de escadas',
+            'Trabalho intensivo com teclado ou outros dispositivos de entrada de dados',
+            'Posto de trabalho improvisado/inadequado',
+            'Mobiliário sem meios de regulagem de ajustes',
+            'Equipamentos e/ou máquinas sem meios de regulagem de ajustes ou sem condições de uso',
+            'Posto de trabalho não planejado/adaptado para à posição sentada',
+            'Assento inadequado',
+            'Encosto do assento inadequado ou ausente',
+            'Mobiliário ou equipamento sem espaço para movimentação de segmentos corporais',
+            'Necessidade de alcançar objetos, documentos, controles, etc, além das zonas de alcance ideais',
+            'Equipamentos/mobiliário não adaptados à antropometria do trabalhador',
+            'Trabalho realizado sem pausas pré-definidas para descanso',
+            'Necessidade de manter ritmos intensos de trabalho',
+            'Trabalho com necessidade de variação de turnos',
+            'Monotonia',
+            'Trabalho noturno',
+            'Insuficiência de capacitação para à execução da tarefa',
+            'Trabalho com utilização rigorosa de metas de produção',
+            'Trabalho remunerado por produção',
+            'Cadência do trabalho imposta por um equipamento',
+            'Desequilíbrio entre tempo de trabalho e tempo de repouso',
+            'Pressão sonora fora dos parâmetros de conforto',
+            'Temperatura efetiva fora dos parâmetros de conforto',
+            'Velocidade do ar fora dos parâmetros de conforto',
+            'Umidade do ar fora dos parâmetros de conforto',
+            'Iluminação inadequada',
+            'Reflexos que causem desconforto ou prejudiquem à visão',
+            'Piso escorregadio ou irregular',
+            'Situações de estresse no local de trabalho',
+            'Situações de sobrecarga de trabalho mental',
+            'Exigência de concentração, atenção e memória',
+            'Trabalho em condições de difícil comunicação',
+            'Conflitos hierárquicos no trabalho',
+            'Problemas de relacionamento no trabalho',
+            'Assédio de qualquer natureza no trabalho',
+            'Dificuldades para cumprir ordens e determinações da chefia relacionadas ao trabalho',
+            'Realização de múltiplas tarefas com alta demanda mental/cognitiva',
+            'Insatisfação no trabalho',
+            'Falta de autonomia para a realização de tarefas no trabalho',
+        ],
+        'danos': [
+            'Distúrbios musculoesqueléticos em músculos e articulações dos membros superiores, inferiores e coluna.',
+            'Sobrecarga dos membros superiores e coluna vertebral; Aumento na pressão dos discos intervertebrais; Dor localizada.',
+            'Sobrecarga corporal, dores nos membros inferiores e em alguns casos na coluna vertebral e cansaço físico.',
+            'Sobrecarga corporal, dores nos membros inferiores e em alguns casos na coluna vertebral e cansaço físico.',
+            'Distúrbios musculoesqueléticos; Fadiga, Dor localizada; Redução da produtividade e da percepção de risco.',
+            'Distúrbios musculoesqueléticos; Fadiga, Dor localizada; Redução da produtividade e da percepção de risco.',
+            'Distúrbios musculoesqueléticos em músculos e articulações dos membros superiores, inferiores e coluna lombar.',
+            'Distúrbios osteomusculares em músculos e articulações dos membros utilizados na execução dos movimentos repetitivos.',
+            'Fadiga muscular; Dor localizada; Lesões musculares; Redução da produtividade e da percepção de risco.',
+            'Sobrecarga muscular, fadiga, dor localizada e perda de produtividade.',
+            'Restrição localizada temporária do fluxo cardiovascular.',
+            'Tensão na parte inferior das costas (coluna lombar), podendo causar fadiga, dor localizada e/ou lesões musculoesqueléticas.',
+            'Distúrbio musculoesqueléticos em músculos e articulações dos membros inferiores.',
+            'Distúrbios musculoesqueléticos em músculos e articulações dos membros superiores.',
+            'Sobrecarga na região do pescoço, ombros e braços, podendo causar fadiga e/ou dor localizada.',
+            'Sobrecarga corporal, aumento da força durante o manuseio, fadiga, dor localizada e perda de produtividade.',
+            'Alterações no sistema digestivo, sistema musculoesquelético, sistema nervoso, alterações na visão, enjoos, náuseas, palidez.',
+            'Alterações articulares e vasomotoras.',
+            'Distúrbios musculoesqueléticos em músculos e articulações dos membros inferiores.',
+            'Sobrecarga nas articulações das mãos, punhos e antebraços, podendo causar lesões como artrite e dificuldade de flexão.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Sobrecarga dos membros superiores e coluna vertebral; Aumento na pressão dos discos intervertebrais; Dor localizada.',
+            'Sobrecarga corporal e dores nos membros superiores, inferiores e coluna vertebral.',
+            'Sobrecarga corporal e dores na região da coluna vertebral.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Adoção de movimentos e posturas inadequadas; Fadiga muscular; Dor localizada; Distúrbios musculoesqueléticos.',
+            'Alterações psicofisiológicas; Sobrecarga e fadiga física e cognitiva; Perda de Produtividade e Redução da Percepção de Riscos.',
+            'Sobrecarga e fadiga física e cognitiva; Redução da Percepção de Risco.',
+            'Alterações psicofisiológicas e/ou sociais.',
+            'Fadiga cognitiva; Sonolência; Morosidade e Redução da Percepção de Riscos.',
+            'Alterações psicofisiológicas e/ou sociais.',
+            'Desconhecimento dos riscos aos quais se expõe e consequente redução da percepção de riscos.',
+            'Sobrecarga e fadiga física e cognitiva; Redução da Percepção de Risco.',
+            'Sobrecarga e fadiga física e cognitiva; Redução da Percepção de Risco.',
+            'Fadiga física e cognitiva.',
+            'Alterações psicofisiológicas; Sobrecarga e fadiga física e cognitiva; Perda de Produtividade e Redução da Percepção de Riscos.',
+            'Irritabilidade, estresse, dores de cabeça, perda de foco no trabalho e redução da produtividade.',
+            'Irritabilidade, estresse, dores de cabeça, perda de foco no trabalho e redução da produtividade.',
+            'Estresse, desconforto térmico, irritabilidade, dores de cabeça, perda foco no trabalho e redução da produtividade.',
+            'Cansaço, estresse, dor de cabeça, alergias, ressecamento da pele, crise de asma, infecções virais ou bacterianas.',
+            'Fadiga visual e cognitiva; Desconforto e Redução da Percepção de Riscos.',
+            'Fadiga visual e cognitiva; Desconforto; Perda de desempenho e Redução da Percepção de Riscos.',
+            'Fadiga muscular; Perda de desempenho; Escoriação; Ferimento; Luxação; Torção.',
+            'Alterações psicofisiológicas e sociais; Fadiga cognitiva; Perda de desempenho; Redução da percepção de risco.',
+            'Alterações psicofisiológicas, Fadiga cognitiva, Perda de desempenho e Redução da percepção de risco.',
+            'Alterações psicofisiológicas, Fadiga cognitiva, Perda de desempenho e Redução da percepção de risco.',
+            'Fadiga cognitiva e perda de desempenho.',
+            'Alterações psicofisiológicas e sociais; Fadiga cognitiva.',
+            'Alterações psicofisiológicas e sociais; Fadiga cognitiva.',
+            'Alterações psicofisiológicas e sociais; Fadiga cognitiva; Perda de desempenho; Redução da percepção de risco.',
+            'Alterações psicofisiológicas; Desconforto, Fadiga cognitiva, Perda de desempenho e Redução da percepção de risco.',
+            'Alterações psicofisiológicas; Desconforto, Fadiga muscular e cognitiva, Perda de desempenho e Redução da percepção de risco.',
+            'Alterações psicofisiológicas e sociais; Fadiga cognitiva; Irritabilidade; Perda de desempenho; Redução da percepção de risco.',
+            'Alterações psicofisiológicas; Desconforto, Fadiga cognitiva e Perda de desempenho.',
+        ]
+    },
+    'acidente': {
+        'riscos': [
+            'Absorção (por contato) de substância cáustica, tóxica ou nociva.',
+            'Afogamento, imersão, engolfamento.',
+            'Aprisionamento em, sob ou entre',
+            'Aprisionamento em, sob ou entre um objeto parado e outro em movimento.',
+            'Aprisionamento em, sob ou entre objetos em movimento convergente.',
+            'Aprisionamento em, sob ou entre dois ou mais objetos em movimento (sem encaixe).',
+            'Aprisionamento em, sob ou entre um objeto parado e outro em movimento.',
+            'Aprisionamento em, sob ou entre desabamento ou desmoronamento de edificação, estrutura, barreira, etc.',
+            'Arestas cortantes, superfícies com rebarbas, farpas ou elementos de fixação espostos',
+            'Ataque de ser vivo por mordedura, picada, chifrada, coice, etc.',
+            'Ataque de ser vivo com peçonha',
+            'Ataque de ser vivo com transmissão de doença',
+            'Ataque de ser vivo (inclusive humano)',
+            'Atrito ou abrasão por encostar em objeto',
+            'Atrito ou abrasão por manusear objeto',
+            'Atrito ou abrasão por corpo estranho no olho',
+            'Atrito ou abrasão',
+            'Atropelamento',
+            'Batida contra objeto parado ou em movimento',
+            'Carga Suspensa',
+            'Colisão entre veículos e/ou equipamentos autopropelidos',
+            'Condições climáticas adversas (sol, chuva, vento, etc.)',
+            'Contato com objeto ou substância em movimento',
+            'Contato com objeto ou substância a temperatura muito alta',
+            'Contato com objeto ou substância a temperatura muito baixa',
+            'Desabamento/Desmoronamento de edificação, estrutura e/ou materiais diversos.',
+            'Elementos Móveis e/ou Rotativos',
+            'Emergências na circunvizinhança',
+            'Equipamento pressurizado hidráulico ou pressurizado.',
+            'Exposição à Energia Elétrica',
+            'Ferramentas manuais',
+            'Ferramentas elétricas',
+            'Gases/vapores/poeiras (tóxicos ou não tóxicos)',
+            'Gases/vapores/poeiras inflamáveis',
+            'Impacto de pessoa contra objeto parado',
+            'Impacto de pessoa contra objeto em movimento',
+            'Impacto sofrido por pessoa.',
+            'Impacto sofrido por pessoa, de objeto em movimento',
+            'Impacto sofrido poe pessoa, de objeto que cai',
+            'Impacto sofrido poe pessoa, de objeto projetado',
+            'Inalação de substância tóxica/nociva.',
+            'Ingestão de substância cáustica, tóxica ou nociva.',
+            'Inalação, ingestão e/ou absorção.',
+            'Incêndio/Explosão',
+            'Objetos cortantes/perfurocortantes',
+            'Pessoas não autorizadas e/ou visitantes no local de trabalho',
+            'Portas, escotilhas, tampas, \"bocas de visita\", flanges',
+            'Projeção de Partículas sólidas e/ou líquidas',
+            'Queda de pessoa com diferença de nível de andaime, passarela, plataforma, etc.',
+            'Queda de pessoa com diferença de nível de escada (móvel ou fixa).',
+            'Queda de pessoa com diferença de nível de material empilhado.',
+            'Queda de pessoa com diferença de nível de veículo.',
+            'Queda de pessoa com diferença de nível em poço, escavação, abertura no piso, etc.',
+            'Queda de pessoa com diferença de nível ≤ 2m',
+            'Queda de pessoa com diferença de nível > 2m',
+            'Queda de pessoa em mesmo nível',
+            'Reação do corpo a seus movimentos (escorregão sem queda, etc.)',
+            'Vidro (recipientes, portas, bancadas, janelas, objetos diversos).',
+            'Soterramento',
+            'Substâncias tóxicas e/ou inflamáveis',
+            'Superfícies, substâncias e/ou objetos aquecidos',
+            'Superfícies, substâncias e/ou objetos em baixa temperatura',
+            'Tombamento, quebra e/ou ruptura de estrutura (fixa ou móvel)',
+            'Tombamento de máquina/equipamento',
+            'Trabalho à céu aberto',
+            'Trabalho em espaços confinados',
+            'Trabalho com máquinas portáteis rotativas.',
+            'Trabalho com máquinas e/ou equipamentos',
+        ],
+        'danos': [
+            'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.',
+            'Asfixia, desconforto respiratório, nível de consciência alterado, letargia, palidez, pele azulada, tosse, transtorno neurológico.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Corte, laceração, ferida contusa, punctura (ferida aberta).',
+            'Perfurações, cortes, arranhões, escoriações, fraturas.',
+            'Dor, inchaço, manchas arroxeadas, sangramento, hemorragia em regiões vitais, infecção, necrose, insuficiência renal.',
+            'Arranhões, lacerações, infecções bacterianas, raiva, entre outros tipos de doenças.',
+            'Ferimentos de diversos tipos, incluindo com uso de armas, cortes, perfurações, luxações, escoriações, fraturas.',
+            'Cortes, ferimentos, esfoladura, escoriações, raspagem superficial da pele, mucosas, etc.',
+            'Cortes, ferimentos, esfoladura, escoriações, raspagem superficial da pele, mucosas, etc.',
+            'Raspagem superficial das córneas.',
+            'Cortes, ferimentos, esfoladura, escoriações, raspagem superficial da pele, mucosas, etc.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Esmagamento, prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Compressão/esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Intermação, insolação, cãibra, exaustão, desidratação, resfriados.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Queimadura ou escaldadura.',
+            'Congelamento, geladura e outros efeitos da exposição à baixa temperatura.',
+            'Compressão e/ou esmagamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Escoriação, ferimento, corte, luxação, fratura, amputação.',
+            'Danos materiais, danos pessoais (queimaduras, contusões, asfixia, aprosionamento, fraturas, etc.).',
+            'Ferimentos, rompimento do tímpano, deslocamento de retina ocular, projeção de partículas sólidas e liquidas, queimaduras, choque elétrico.',
+            'Choque elétrico e eletroplessão (eletrocussão).',
+            'Cortes, ferimentos, escoriações.',
+            'Cortes, ferimentos, escoriações, choque elétrico.',
+            'Irritação os olhos e/ou da pele, dermatites, doenças respiratórias, intoxicação.',
+            'Asfixia, queimaduras, morte por explosão.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Cortes, escoriações, luxações, fraturas, amputações.',
+            'Esmagamento, prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Escoriação, ferimento, perfuração, corte, luxação, fratura, prensamento.',
+            'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.',
+            'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.',
+            'Intoxicação, envenenamento, queimadura, irritação ou reação alérgica.',
+            'Queimadura de 1º, 2º ou 3º grau, asfixia,  arremessos, cortes, escoriações, luxações, fraturas.',
+            'Corte, laceração, ferida contusa, punctura (ferida aberta), perfuração.',
+            'Escoriação, ferimento, corte, luxação, fratura, entre outros danos devido às características do local e atividades realizadas.',
+            'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações, exposição à gases tóxicos.',
+            'Ferimento, corte, queimadura, perfuração, intoxicação.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas, morte.',
+            'Escoriações, ferimentos, cortes, luxações, fraturas.',
+            'Torções, distensções, rupturas ou outras lesões musculares internas.',
+            'Corte, ferimento, perfuração.',
+            'Asfixia, desconforto respiratório, nível de consciência alterado, letargia, palidez, pele azulada, tosse, transtorno neurológico.',
+            'Intoxicação, asfixia, queimaduras de  1º, 2º ou 3º grau.',
+            'Queimadura de 1º, 2º ou 3º grau.',
+            'Queimadura de 1º, 2º ou 3º grau.',
+            'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações.',
+            'Intermação, insolação, cãibra, exaustão, desidratação, resfriados.',
+            'Asfixia, hiperóxia, contaminação por poeiras e/ou gases tóxicos, queimadura de 1º, 2º ou 3º grau, arremessos, cortes, escoriações, luxações, fraturas.',
+            'Cortes, ferimentos, escoriações, amputações.',
+            'Prensamento ou aprisionamento de partes do corpo, cortes, escoriações, luxações, fraturas, amputações, choque elétrico.',
+        ]
+    },
+}
+
+def get_danos_por_riscos_pgr(categoria, riscos_selecionados):
+    """Retorna os danos associados aos riscos selecionados da planilha PGR"""
+    if categoria not in RISCOS_PGR_DADOS or not riscos_selecionados:
+        return ""
+
+    danos_lista = []
+    riscos_categoria = RISCOS_PGR_DADOS[categoria]["riscos"]
+    danos_categoria = RISCOS_PGR_DADOS[categoria]["danos"]
+
+    for risco in riscos_selecionados:
+        if risco in riscos_categoria:
+            indice = riscos_categoria.index(risco)
+            if indice < len(danos_categoria):
+                danos_lista.append(danos_categoria[indice])
+
+    return "; ".join(danos_lista) if danos_lista else ""
+
+
 
 # --- Inicialização dos Gerenciadores ---
 @st.cache_resource
@@ -489,143 +825,116 @@ def main():
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
         st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
         st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
-
     with st.container(border=True):
         st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
-        st.info("Os riscos configurados aqui serão aplicados a TODOS os funcionários selecionados.")
-        riscos_selecionados = []
-        nomes_abas = list(CATEGORIAS_RISCO.values()) + ["➕ Manual"]
-        tabs = st.tabs(nomes_abas)
-        for i, (categoria_key, categoria_nome) in enumerate(CATEGORIAS_RISCO.items()):
-            with tabs[i]:
-                riscos_da_categoria = df_pgr[df_pgr['categoria'] == categoria_key]['risco'].tolist()
-                selecionados = st.multiselect("Selecione os riscos:", options=riscos_da_categoria, key=f"riscos_{categoria_key}")
-                riscos_selecionados.extend(selecionados)
-        with tabs[-1]:
-            with st.form("form_risco_manual", clear_on_submit=True):
-                st.markdown("###### Adicionar um Risco que não está na lista")
-                risco_manual_nome = st.text_input("Descrição do Risco")
-                categoria_manual = st.selectbox("Categoria do Risco Manual", list(CATEGORIAS_RISCO.values()))
-                danos_manuais = st.text_area("Possíveis Danos (Opcional)")
-                if st.form_submit_button("Adicionar Risco Manual"):
-                    if risco_manual_nome and categoria_manual:
-                        user_data_manager.add_manual_risk(user_id, categoria_manual, risco_manual_nome, danos_manuais)
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-            if st.session_state.riscos_manuais_adicionados:
-                st.write("**Riscos manuais salvos:**")
-                for r in st.session_state.riscos_manuais_adicionados:
-                    col1, col2 = st.columns([4, 1])
-                    col1.markdown(f"- **{r['risk_name']}** ({r['category']})")
-                    if col2.button("Remover", key=f"rem_risco_{r['id']}"):
-                        user_data_manager.remove_manual_risk(user_id, r['id'])
-                        st.session_state.user_data_loaded = False
-                        st.rerun()
-        
-        total_riscos = len(riscos_selecionados) + len(st.session_state.riscos_manuais_adicionados)
+        st.info("Configure os riscos que serão aplicados a TODOS os funcionários selecionados.")
+
+        # Tabs para cada categoria de risco
+        tab_fisico, tab_quimico, tab_biologico, tab_ergonomico, tab_acidente, tab_manual = st.tabs([
+            "🔥 Físicos", "⚗️ Químicos", "🦠 Biológicos", "🏃 Ergonômicos", "⚠️ Acidentes", "➕ Manual"
+        ])
+
+        riscos_selecionados_pgr = {}  # Para armazenar os riscos selecionados da planilha PGR
+
+        # Tab Físicos
+        with tab_fisico:
+            if 'fisico' in RISCOS_PGR_DADOS:
+                st.write(f"**Riscos Físicos PGR:** {len(RISCOS_PGR_DADOS['fisico']['riscos'])} opções disponíveis")
+                riscos_selecionados_pgr['fisico'] = st.multiselect(
+                    "Selecione os Riscos Físicos:",
+                    options=RISCOS_PGR_DADOS['fisico']['riscos'],
+                    key="riscos_pgr_fisico",
+                    help="Riscos físicos da planilha PGR"
+                )
+                if riscos_selecionados_pgr['fisico']:
+                    danos = get_danos_por_riscos_pgr('fisico', riscos_selecionados_pgr['fisico'])
+                    if danos:
+                        st.info(f"**Possíveis Danos:** {danos}")
+
+        # Tab Químicos
+        with tab_quimico:
+            if 'quimico' in RISCOS_PGR_DADOS:
+                st.write(f"**Riscos Químicos PGR:** {len(RISCOS_PGR_DADOS['quimico']['riscos'])} opções disponíveis")
+                riscos_selecionados_pgr['quimico'] = st.multiselect(
+                    "Selecione os Riscos Químicos:",
+                    options=RISCOS_PGR_DADOS['quimico']['riscos'],
+                    key="riscos_pgr_quimico",
+                    help="Riscos químicos da planilha PGR"
+                )
+                if riscos_selecionados_pgr['quimico']:
+                    danos = get_danos_por_riscos_pgr('quimico', riscos_selecionados_pgr['quimico'])
+                    if danos:
+                        st.info(f"**Possíveis Danos:** {danos}")
+
+        # Tab Biológicos
+        with tab_biologico:
+            if 'biologico' in RISCOS_PGR_DADOS:
+                st.write(f"**Riscos Biológicos PGR:** {len(RISCOS_PGR_DADOS['biologico']['riscos'])} opções disponíveis")
+                riscos_selecionados_pgr['biologico'] = st.multiselect(
+                    "Selecione os Riscos Biológicos:",
+                    options=RISCOS_PGR_DADOS['biologico']['riscos'],
+                    key="riscos_pgr_biologico",
+                    help="Riscos biológicos da planilha PGR"
+                )
+                if riscos_selecionados_pgr['biologico']:
+                    danos = get_danos_por_riscos_pgr('biologico', riscos_selecionados_pgr['biologico'])
+                    if danos:
+                        st.info(f"**Possíveis Danos:** {danos}")
+
+        # Tab Ergonômicos
+        with tab_ergonomico:
+            if 'ergonomico' in RISCOS_PGR_DADOS:
+                st.write(f"**Riscos Ergonômicos PGR:** {len(RISCOS_PGR_DADOS['ergonomico']['riscos'])} opções disponíveis")
+                riscos_selecionados_pgr['ergonomico'] = st.multiselect(
+                    "Selecione os Riscos Ergonômicos:",
+                    options=RISCOS_PGR_DADOS['ergonomico']['riscos'],
+                    key="riscos_pgr_ergonomico",
+                    help="Riscos ergonômicos da planilha PGR"
+                )
+                if riscos_selecionados_pgr['ergonomico']:
+                    danos = get_danos_por_riscos_pgr('ergonomico', riscos_selecionados_pgr['ergonomico'])
+                    if danos:
+                        st.info(f"**Possíveis Danos:** {danos}")
+
+        # Tab Acidentes
+        with tab_acidente:
+            if 'acidente' in RISCOS_PGR_DADOS:
+                st.write(f"**Riscos de Acidente PGR:** {len(RISCOS_PGR_DADOS['acidente']['riscos'])} opções disponíveis")
+                riscos_selecionados_pgr['acidente'] = st.multiselect(
+                    "Selecione os Riscos de Acidente:",
+                    options=RISCOS_PGR_DADOS['acidente']['riscos'],
+                    key="riscos_pgr_acidente",
+                    help="Riscos de acidente da planilha PGR"
+                )
+                if riscos_selecionados_pgr['acidente']:
+                    danos = get_danos_por_riscos_pgr('acidente', riscos_selecionados_pgr['acidente'])
+                    if danos:
+                        st.info(f"**Possíveis Danos:** {danos}")
+
+        # Tab Manual (mantém funcionalidade existente)
+        with tab_manual:
+            st.markdown("**Adicionar Riscos Personalizados**")
+            st.info("Use esta seção para adicionar riscos que não estão na planilha PGR")
+
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                risco_manual = st.text_input("Descrição do Risco Personalizado:")
+            with col2:
+                categoria_manual = st.selectbox("Categoria:", ["Físico", "Químico", "Biológico", "Ergonômico", "Acidente"])
+
+            if st.button("Adicionar Risco Personalizado"):
+                if risco_manual:
+                    st.success(f"Risco '{risco_manual}' adicionado à categoria {categoria_manual}")
+                else:
+                    st.error("Digite a descrição do risco")
+
+        # Resumo dos riscos selecionados
+        total_riscos = sum(len(riscos) for riscos in riscos_selecionados_pgr.values() if riscos)
         if total_riscos > 0:
-            with st.expander(f"📖 Resumo de Riscos Selecionados ({total_riscos} no total)", expanded=True):
-                riscos_para_exibir = {cat: [] for cat in CATEGORIAS_RISCO.values()}
-                for risco_nome in riscos_selecionados:
-                    categoria_key_series = df_pgr[df_pgr['risco'] == risco_nome]['categoria']
-                    if not categoria_key_series.empty:
-                        categoria_key = categoria_key_series.iloc[0]
-                        categoria_display = CATEGORIAS_RISCO.get(categoria_key)
-                        if categoria_display:
-                            riscos_para_exibir[categoria_display].append(risco_nome)
-                for risco_manual in st.session_state.riscos_manuais_adicionados:
-                    riscos_para_exibir[risco_manual['category']].append(risco_manual['risk_name'])
-                for categoria, lista_riscos in riscos_para_exibir.items():
-                    if lista_riscos:
-                        st.markdown(f"**{categoria}**")
-                        for risco in sorted(list(set(lista_riscos))):
-                            st.markdown(f"- {risco}")
-        
-        st.divider()
-
-        col_exp1, col_exp2 = st.columns(2)
-        with col_exp1:
-            with st.expander("📊 **Adicionar Medições**"):
-                with st.form("form_medicao", clear_on_submit=True):
-                    opcoes_agente = ["-- Digite um novo agente abaixo --"] + AGENTES_DE_RISCO
-                    agente_selecionado = st.selectbox("Selecione um Agente/Fonte da lista...", options=opcoes_agente)
-                    agente_manual = st.text_input("...ou digite um novo aqui:")
-                    valor = st.text_input("Valor Medido")
-                    unidade = st.selectbox("Unidade", UNIDADES_DE_MEDIDA)
-                    epi_med = st.text_input("EPI Associado (Opcional)")
-                    if st.form_submit_button("Adicionar Medição"):
-                        agente_a_salvar = agente_manual.strip() if agente_manual.strip() else agente_selecionado
-                        if agente_a_salvar != "-- Digite um novo agente abaixo --" and valor:
-                            user_data_manager.add_measurement(user_id, agente_a_salvar, valor, unidade, epi_med)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                        else:
-                            st.warning("Por favor, preencha o Agente e o Valor.")
-                if st.session_state.medicoes_adicionadas:
-                    st.write("**Medições salvas:**")
-                    for med in st.session_state.medicoes_adicionadas:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {med['agent']}: {med['value']} {med['unit']}")
-                        if col2.button("Remover", key=f"rem_med_{med['id']}"):
-                            user_data_manager.remove_measurement(user_id, med['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-        with col_exp2:
-            with st.expander("🦺 **Adicionar EPIs Gerais**"):
-                with st.form("form_epi", clear_on_submit=True):
-                    epi_nome = st.text_input("Nome do EPI")
-                    if st.form_submit_button("Adicionar EPI"):
-                        if epi_nome:
-                            user_data_manager.add_epi(user_id, epi_nome)
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-                if st.session_state.epis_adicionados:
-                    st.write("**EPIs salvos:**")
-                    for epi in st.session_state.epis_adicionados:
-                        col1, col2 = st.columns([4, 1])
-                        col1.markdown(f"- {epi['epi_name']}")
-                        if col2.button("Remover", key=f"rem_epi_{epi['id']}"):
-                            user_data_manager.remove_epi(user_id, epi['id'])
-                            st.session_state.user_data_loaded = False
-                            st.rerun()
-
-    st.divider()
-    if st.button("🚀 Gerar OS para Funcionários Selecionados", type="primary", use_container_width=True, disabled=df_final_filtrado.empty):
-        with st.spinner(f"Gerando {len(df_final_filtrado)} documentos..."):
-            documentos_gerados = []
-            combinacoes_processadas = set()
-            for _, func in df_final_filtrado.iterrows():
-                combinacoes_processadas.add((func['setor'], func['funcao']))
-                doc = gerar_os(
-                    func, 
-                    df_pgr, 
-                    riscos_selecionados, 
-                    st.session_state.epis_adicionados,
-                    st.session_state.medicoes_adicionadas, 
-                    st.session_state.riscos_manuais_adicionados, 
-                    arquivo_modelo_os
-                )
-                doc_io = BytesIO()
-                doc.save(doc_io)
-                doc_io.seek(0)
-                nome_limpo = re.sub(r'[^\w\s-]', '', func.get("nome_do_funcionario", "Func_Sem_Nome")).strip().replace(" ", "_")
-                caminho_no_zip = f"{func.get('setor', 'SemSetor')}/{func.get('funcao', 'SemFuncao')}/OS_{nome_limpo}.docx"
-                documentos_gerados.append((caminho_no_zip, doc_io.getvalue()))
-            st.session_state.cargos_concluidos.update(combinacoes_processadas)
-            if documentos_gerados:
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                    for nome_arquivo, conteudo_doc in documentos_gerados:
-                        zip_file.writestr(nome_arquivo, conteudo_doc)
-                nome_arquivo_zip = f"OS_Geradas_{time.strftime('%Y%m%d')}.zip"
-                st.success(f"🎉 **{len(documentos_gerados)} Ordens de Serviço geradas!**")
-                st.download_button(
-                    label="📥 Baixar Todas as OS (.zip)", 
-                    data=zip_buffer.getvalue(), 
-                    file_name=nome_arquivo_zip, 
-                    mime="application/zip",
-                    use_container_width=True
-                )
-
-if __name__ == "__main__":
-    main()
+            st.success(f"**Total de riscos selecionados:** {total_riscos}")
+            with st.expander("Ver resumo dos riscos selecionados"):
+                for categoria, riscos_lista in riscos_selecionados_pgr.items():
+                    if riscos_lista:
+                        st.write(f"**{categoria.title()}:** {len(riscos_lista)} riscos")
+                        for risco in riscos_lista:
+                            st.write(f"• {risco}")
