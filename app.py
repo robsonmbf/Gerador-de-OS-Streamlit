@@ -667,17 +667,18 @@ def substituir_placeholders(doc, contexto):
 def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
     doc = Document(modelo_doc_carregado)
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
-    riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
-    danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
+    # Inicializar dicionários para acumular riscos e danos
+    riscos_acumulados = {cat: set() for cat in CATEGORIAS_RISCO.keys()}
+    danos_acumulados = {cat: set() for cat in CATEGORIAS_RISCO.keys()}
 
     # Processar riscos selecionados
     for _, risco_row in riscos_info.iterrows():
         categoria = str(risco_row.get("categoria", "")).lower()
-        if categoria in riscos_por_categoria:
-            riscos_por_categoria[categoria].append(str(risco_row.get("risco", "")))
+        if categoria in riscos_acumulados:
+            riscos_acumulados[categoria].add(str(risco_row.get("risco", "")))
             danos = risco_row.get("possiveis_danos")
             if pd.notna(danos): 
-                danos_por_categoria[categoria].append(str(danos))
+                danos_acumulados[categoria].add(str(danos))
 
     # Processar riscos manuais
     if riscos_manuais:
@@ -686,15 +687,11 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
             categoria_display = risco_manual.get('category')
             categoria_alvo = map_categorias_rev.get(categoria_display)
             if categoria_alvo:
-                riscos_por_categoria[categoria_alvo].append(risco_manual.get('risk_name', ''))
-                if risco_manual.get('possible_damages'):
-                    danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
+                riscos_acumulados[categoria_alvo].add(risco_manual.get("risk_name", ""))
+                if risco_manual.get("possible_damages"):
+                    danos_acumulados[categoria_alvo].add(risco_manual.get("possible_damages"))
 
-    # Limpar duplicatas e garantir que riscos manuais não dupliquem riscos existentes
-    for cat in riscos_por_categoria:
-        riscos_por_categoria[cat] = sorted(list(set(riscos_por_categoria[cat])))
-    for cat in danos_por_categoria:
-        danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
+
 
     # FORMATAÇÃO SIMPLES DAS MEDIÇÕES - CORREÇÃO DO ERRO
     medicoes_formatadas = []
@@ -755,16 +752,16 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
         "[SETOR]": str(funcionario.get("setor", funcionario.get("Setor", "N/A"))), 
         "[FUNÇÃO]": str(funcionario.get("funcao", funcionario.get("Função", "N/A"))),
         "[DESCRIÇÃO DE ATIVIDADES]": descricao_atividades,
-        "[RISCOS FÍSICOS]": tratar_lista_vazia(riscos_por_categoria["fisico"]),
-        "[RISCOS DE ACIDENTE]": tratar_lista_vazia(riscos_por_categoria["acidente"]),
-        "[RISCOS QUÍMICOS]": tratar_lista_vazia(riscos_por_categoria["quimico"]),
-        "[RISCOS BIOLÓGICOS]": tratar_lista_vazia(riscos_por_categoria["biologico"]),
-        "[RISCOS ERGONÔMICOS]": tratar_lista_vazia(riscos_por_categoria["ergonomico"]),
-        "[POSSÍVEIS DANOS RISCOS FÍSICOS]": tratar_lista_vazia(danos_por_categoria["fisico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ACIDENTE]": tratar_lista_vazia(danos_por_categoria["acidente"], "; "),
-        "[POSSÍVEIS DANOS RISCOS QUÍMICOS]": tratar_lista_vazia(danos_por_categoria["quimico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(danos_por_categoria["biologico"], "; "),
-        "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(danos_por_categoria["ergonomico"], "; "),
+        "[RISCOS FÍSICOS]": tratar_lista_vazia(sorted(list(riscos_acumulados["fisico"]))),
+        "[RISCOS DE ACIDENTE]": tratar_lista_vazia(sorted(list(riscos_acumulados["acidente"]))),
+        "[RISCOS QUÍMICOS]": tratar_lista_vazia(sorted(list(riscos_acumulados["quimico"]))),
+        "[RISCOS BIOLÓGICOS]": tratar_lista_vazia(sorted(list(riscos_acumulados["biologico"]))),
+        "[RISCOS ERGONÔMICOS]": tratar_lista_vazia(sorted(list(riscos_acumulados["ergonomico"]))),
+        "[POSSÍVEIS DANOS RISCOS FÍSICOS]": tratar_lista_vazia(sorted(list(danos_acumulados["fisico"])), "; "),
+        "[POSSÍVEIS DANOS RISCOS ACIDENTE]": tratar_lista_vazia(sorted(list(danos_acumulados["acidente"])), "; "),
+        "[POSSÍVEIS DANOS RISCOS QUÍMICOS]": tratar_lista_vazia(sorted(list(danos_acumulados["quimico"])), "; "),
+        "[POSSÍVEIS DANOS RISCOS BIOLÓGICOS]": tratar_lista_vazia(sorted(list(danos_acumulados["biologico"])), "; "),
+        "[POSSÍVEIS DANOS RISCOS ERGONÔMICOS]": tratar_lista_vazia(sorted(list(danos_acumulados["ergonomico"])), "; "),
         "[EPIS]": tratar_lista_vazia([epi['epi_name'] for epi in epis_manuais]),
         "[MEDIÇÕES]": medicoes_texto,
     }
