@@ -690,7 +690,9 @@ def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_ma
                 if risco_manual.get('possible_damages'):
                     danos_por_categoria[categoria_alvo].append(risco_manual.get('possible_damages'))
 
-    # Limpar duplicatas
+    # Limpar duplicatas e garantir que riscos manuais não dupliquem riscos existentes
+    for cat in riscos_por_categoria:
+        riscos_por_categoria[cat] = sorted(list(set(riscos_por_categoria[cat])))
     for cat in danos_por_categoria:
         danos_por_categoria[cat] = sorted(list(set(danos_por_categoria[cat])))
 
