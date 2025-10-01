@@ -725,8 +725,7 @@ def main():
 
         with tab_quimico:
             if 'quimico' in RISCOS_PGR_DADOS:
-                st.write(f"**Riscos Químicos PGR:** {len(RISCOS_PGR_DADOS['quimico']['riscos'])}
-                opções disponíveis")
+                st.write(f"**Riscos Químicos PGR:** {len(RISCOS_PGR_DADOS['quimico']['riscos'])} opções disponíveis")
                 riscos_selecionados_pgr['quimico'] = st.multiselect(
                     "Selecione os Riscos Químicos:",
                     options=RISCOS_PGR_DADOS['quimico']['riscos'],
