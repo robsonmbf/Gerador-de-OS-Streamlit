@@ -140,9 +140,15 @@ class AuthManager:
         if not session:
             return False, None
         
-        # Verificar se não expirou
-        expires_at = datetime.fromisoformat(session['expires_at'])
-        if datetime.now() > expires_at:
+        # Verificar se não expirou (tolerante ao formato do SQLite)
+        expires_at_raw = str(session['expires_at']).strip()
+        try:
+            expires_at = datetime.fromisoformat(expires_at_raw.replace('Z', '+00:00'))
+        except ValueError:
+            # fallback para formatos comuns sem microssegundos
+            expires_at = datetime.strptime(expires_at_raw.split('.')[0], '%Y-%m-%d %H:%M:%S')
+
+        if datetime.now() > expires_at.replace(tzinfo=None):
             self.logout_user(session_token)
             return False, None
         

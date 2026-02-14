@@ -16,19 +16,34 @@ class UserDataManager:
         value = sanitize_input(value)
         unit = sanitize_input(unit)
         epi = sanitize_input(epi) if epi else None
-        
+
+        if not agent or not value or not unit:
+            return False, "Agente, valor e unidade são obrigatórios", None
+
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
+
+        # Evita duplicidades ativas para o mesmo usuário
+        cursor.execute('''
+            SELECT id FROM user_measurements
+            WHERE user_id = ? AND agent = ? AND value = ? AND unit = ?
+              AND COALESCE(epi, '') = COALESCE(?, '') AND is_active = TRUE
+        ''', (user_id, agent, value, unit, epi))
+
+        if cursor.fetchone():
+            conn.close()
+            return False, "Medição já cadastrada", None
+
         try:
             cursor.execute('''
                 INSERT INTO user_measurements (user_id, agent, value, unit, epi)
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, agent, value, unit, epi))
-            
+
             measurement_id = cursor.lastrowid
             conn.commit()
-            
+            conn.close()
+
             # Log da atividade
             self.db.log_activity(user_id, 'add_measurement', {
                 'agent': agent,
@@ -36,10 +51,9 @@ class UserDataManager:
                 'unit': unit,
                 'epi': epi
             })
-            
-            conn.close()
+
             return True, "Medição adicionada com sucesso", measurement_id
-        
+
         except Exception as e:
             conn.close()
             return False, f"Erro ao adicionar medição: {str(e)}", None
@@ -213,32 +227,42 @@ class UserDataManager:
         category = sanitize_input(category)
         risk_name = sanitize_input(risk_name)
         possible_damages = sanitize_input(possible_damages) if possible_damages else None
-        
+
         if not category or not risk_name:
             return False, "Categoria e nome do risco são obrigatórios", None
-        
+
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        
+
+        # Evita riscos duplicados por categoria para o mesmo usuário
+        cursor.execute('''
+            SELECT id FROM user_manual_risks
+            WHERE user_id = ? AND category = ? AND risk_name = ? AND is_active = TRUE
+        ''', (user_id, category, risk_name))
+
+        if cursor.fetchone():
+            conn.close()
+            return False, "Risco manual já adicionado", None
+
         try:
             cursor.execute('''
                 INSERT INTO user_manual_risks (user_id, category, risk_name, possible_damages)
                 VALUES (?, ?, ?, ?)
             ''', (user_id, category, risk_name, possible_damages))
-            
+
             risk_id = cursor.lastrowid
             conn.commit()
-            
+            conn.close()
+
             # Log da atividade
             self.db.log_activity(user_id, 'add_manual_risk', {
                 'category': category,
                 'risk_name': risk_name,
                 'possible_damages': possible_damages
             })
-            
-            conn.close()
+
             return True, "Risco manual adicionado com sucesso", risk_id
-        
+
         except Exception as e:
             conn.close()
             return False, f"Erro ao adicionar risco manual: {str(e)}", None

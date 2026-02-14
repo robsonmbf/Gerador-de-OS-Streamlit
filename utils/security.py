@@ -41,10 +41,12 @@ def get_session_expiry(hours=24):
 
 def sanitize_input(text):
     """Sanitiza entrada de texto para prevenir injeções"""
+    if text is None:
+        return ""
+
     if not isinstance(text, str):
         return str(text)
     
     # Remove caracteres potencialmente perigosos
     sanitized = re.sub(r'[<>"\';]', '', text)
     return sanitized.strip()
-
