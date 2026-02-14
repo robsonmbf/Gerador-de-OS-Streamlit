@@ -46,7 +46,7 @@ cd Gerador-de-OS-Streamlit
 pip install -r requirements.txt
 
 # Execute a aplicação
-streamlit run app_os_generator.py
+streamlit run app.py
 ```
 
 ## 🌐 Deploy Online
