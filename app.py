@@ -410,6 +410,8 @@ def init_user_session_state():
         st.session_state.riscos_manuais_adicionados = []
     if 'cargos_concluidos' not in st.session_state:
         st.session_state.cargos_concluidos = set()
+    if 'os_setor_cargo_manuais' not in st.session_state:
+        st.session_state.os_setor_cargo_manuais = []
 
 def normalizar_texto(texto):
     if not isinstance(texto, str): return ""
@@ -655,33 +657,89 @@ def main():
         return
     user_id = st.session_state.user_data['user_id']
     show_user_info()
-    st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx) e uma planilha de funcionários.</p></div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="main-header"><h1>📄 Gerador de Ordens de Serviço (OS)</h1><p>Gere OS em lote a partir de um modelo Word (.docx), com planilha de funcionários ou por setor/cargo.</p></div>""", unsafe_allow_html=True)
+
+    modo_geracao = st.radio(
+        "Como deseja gerar as OS?",
+        options=["Com planilha de funcionários", "Sem planilha (por setor e cargo)"],
+        horizontal=True
+    )
 
     with st.container(border=True):
         st.markdown("##### 📂 1. Carregue os Documentos")
         col1, col2 = st.columns(2)
         with col1:
             arquivo_funcionarios = st.file_uploader("📄 **Planilha de Funcionários (.xlsx)**", type="xlsx")
+            if modo_geracao == "Sem planilha (por setor e cargo)":
+                st.caption("Opcional neste modo.")
         with col2:
             arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
 
-    if not arquivo_funcionarios or not arquivo_modelo_os:
-        st.info("📋 Por favor, carregue a Planilha de Funcionários e o Modelo de OS para continuar.")
+    if not arquivo_modelo_os:
+        st.info("📋 Por favor, carregue o Modelo de OS para continuar.")
         return
-    
-    df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
-    if df_funcionarios_raw is None:
-        st.stop()
 
-    df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
+    df_funcionarios = pd.DataFrame()
+    if modo_geracao == "Com planilha de funcionários":
+        if not arquivo_funcionarios:
+            st.info("📋 Neste modo, carregue a Planilha de Funcionários para continuar.")
+            return
+
+        df_funcionarios_raw = carregar_planilha(arquivo_funcionarios)
+        if df_funcionarios_raw is None:
+            st.stop()
+
+        df_funcionarios = mapear_e_renomear_colunas_funcionarios(df_funcionarios_raw)
+    else:
+        with st.container(border=True):
+            st.markdown('##### 👥 2. Monte a Lista de OS por Setor e Cargo')
+            st.caption("Adicione os setores/cargos para gerar uma OS por combinação.")
+            with st.form("form_setor_cargo", clear_on_submit=True):
+                col_setor, col_funcao, col_empresa, col_unidade = st.columns(4)
+                with col_setor:
+                    setor_manual = st.text_input("Setor")
+                with col_funcao:
+                    funcao_manual = st.text_input("Cargo/Função")
+                with col_empresa:
+                    empresa_manual = st.text_input("Empresa (opcional)")
+                with col_unidade:
+                    unidade_manual = st.text_input("Unidade (opcional)")
+                descricao_manual = st.text_area("Descrição de atividades (opcional)")
+                if st.form_submit_button("Adicionar setor/cargo"):
+                    if setor_manual.strip() and funcao_manual.strip():
+                        st.session_state.os_setor_cargo_manuais.append({
+                            'setor': setor_manual.strip(),
+                            'funcao': funcao_manual.strip(),
+                            'empresa': empresa_manual.strip(),
+                            'unidade': unidade_manual.strip(),
+                            'descricao_de_atividades': descricao_manual.strip(),
+                            'nome_do_funcionario': f"Colaboradores - {setor_manual.strip()} / {funcao_manual.strip()}",
+                            'data_de_admissao': pd.NaT,
+                        })
+                        st.rerun()
+                    else:
+                        st.warning("Informe ao menos Setor e Cargo/Função.")
+
+            if st.session_state.os_setor_cargo_manuais:
+                st.write("**Combinações adicionadas:**")
+                for i, combinacao in enumerate(st.session_state.os_setor_cargo_manuais):
+                    col_desc, col_btn = st.columns([5, 1])
+                    col_desc.markdown(f"- **{combinacao['setor']}** / **{combinacao['funcao']}**")
+                    if col_btn.button("Remover", key=f"rem_setor_cargo_{i}"):
+                        st.session_state.os_setor_cargo_manuais.pop(i)
+                        st.rerun()
+
+            if st.session_state.os_setor_cargo_manuais:
+                df_funcionarios = pd.DataFrame(st.session_state.os_setor_cargo_manuais)
     df_pgr = obter_dados_pgr()
 
     with st.container(border=True):
-        st.markdown('##### 👥 2. Selecione os Funcionários')
+        st.markdown('##### 👥 3. Selecione os Registros para Geração')
         setores = sorted(df_funcionarios['setor'].dropna().unique().tolist()) if 'setor' in df_funcionarios.columns else []
         setor_sel = st.multiselect("Filtrar por Setor(es)", setores)
         df_filtrado_setor = df_funcionarios[df_funcionarios['setor'].isin(setor_sel)] if setor_sel else df_funcionarios
-        st.caption(f"{len(df_filtrado_setor)} funcionário(s) no(s) setor(es) selecionado(s).")
+        tipo_registro = "funcionário(s)" if modo_geracao == "Com planilha de funcionários" else "registro(s)"
+        st.caption(f"{len(df_filtrado_setor)} {tipo_registro} no(s) setor(es) selecionado(s).")
         funcoes_disponiveis = sorted(df_filtrado_setor['funcao'].dropna().unique().tolist()) if 'funcao' in df_filtrado_setor.columns else []
         funcoes_formatadas = []
         if setor_sel:
@@ -696,11 +754,14 @@ def main():
         funcao_sel_formatada = st.multiselect("Filtrar por Função/Cargo(s)", funcoes_formatadas)
         funcao_sel = [f.replace(" ✅ Concluído", "") for f in funcao_sel_formatada]
         df_final_filtrado = df_filtrado_setor[df_filtrado_setor['funcao'].isin(funcao_sel)] if funcao_sel else df_filtrado_setor
-        st.success(f"**{len(df_final_filtrado)} funcionário(s) selecionado(s) para gerar OS.**")
-        st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
+        st.success(f"**{len(df_final_filtrado)} {tipo_registro} selecionado(s) para gerar OS.**")
+        if {'nome_do_funcionario', 'setor', 'funcao'}.issubset(df_final_filtrado.columns):
+            st.dataframe(df_final_filtrado[['nome_do_funcionario', 'setor', 'funcao']])
+        elif {'setor', 'funcao'}.issubset(df_final_filtrado.columns):
+            st.dataframe(df_final_filtrado[['setor', 'funcao']])
 
     with st.container(border=True):
-        st.markdown('##### ⚠️ 3. Configure os Riscos e Medidas de Controle')
+        st.markdown('##### ⚠️ 4. Configure os Riscos e Medidas de Controle')
         st.info("Configure os riscos que serão aplicados a TODOS os funcionários selecionados.")
 
         tab_fisico, tab_quimico, tab_biologico, tab_ergonomico, tab_acidente, tab_manual = st.tabs([
