@@ -401,6 +401,7 @@ def init_user_session_state():
             st.session_state.medicoes_adicionadas = user_data_manager.get_user_measurements(user_id)
             st.session_state.epis_adicionados = user_data_manager.get_user_epis(user_id)
             st.session_state.riscos_manuais_adicionados = user_data_manager.get_user_manual_risks(user_id)
+            st.session_state.modelos_docx_adicionados = user_data_manager.get_user_docx_templates(user_id)
             st.session_state.user_data_loaded = True
     if 'medicoes_adicionadas' not in st.session_state:
         st.session_state.medicoes_adicionadas = []
@@ -408,6 +409,8 @@ def init_user_session_state():
         st.session_state.epis_adicionados = []
     if 'riscos_manuais_adicionados' not in st.session_state:
         st.session_state.riscos_manuais_adicionados = []
+    if 'modelos_docx_adicionados' not in st.session_state:
+        st.session_state.modelos_docx_adicionados = []
     if 'cargos_concluidos' not in st.session_state:
         st.session_state.cargos_concluidos = set()
     if 'os_setor_cargo_manuais' not in st.session_state:
@@ -553,8 +556,8 @@ def substituir_placeholders(doc, contexto):
     for p in doc.paragraphs:
         processar_paragrafo(p)
 
-def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_carregado):
-    doc = Document(modelo_doc_carregado)
+def gerar_os(funcionario, df_pgr, riscos_selecionados, epis_manuais, medicoes_manuais, riscos_manuais, modelo_doc_bytes):
+    doc = Document(BytesIO(modelo_doc_bytes))
     riscos_info = df_pgr[df_pgr['risco'].isin(riscos_selecionados)]
     riscos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
     danos_por_categoria = {cat: [] for cat in CATEGORIAS_RISCO.keys()}
@@ -673,11 +676,61 @@ def main():
             if modo_geracao == "Sem planilha (por setor e cargo)":
                 st.caption("Opcional neste modo.")
         with col2:
-            arquivo_modelo_os = st.file_uploader("📝 **Modelo de OS (.docx)**", type="docx")
+            arquivo_modelo_os_upload = st.file_uploader("📝 **Upload de Modelo de OS (.docx)**", type="docx")
+
+            with st.expander("💾 Modelos DOCX cadastrados"):
+                with st.form("form_modelo_docx", clear_on_submit=True):
+                    nome_modelo_docx = st.text_input("Nome do modelo")
+                    arquivo_modelo_salvar = st.file_uploader("Arquivo .docx para cadastrar", type="docx", key="upload_modelo_salvar")
+                    if st.form_submit_button("Salvar modelo"):
+                        if nome_modelo_docx and arquivo_modelo_salvar:
+                            sucesso, mensagem, _ = user_data_manager.add_docx_template(
+                                user_id,
+                                nome_modelo_docx,
+                                arquivo_modelo_salvar.getvalue()
+                            )
+                            if sucesso:
+                                st.success(mensagem)
+                                st.session_state.user_data_loaded = False
+                                st.rerun()
+                            else:
+                                st.warning(mensagem)
+                        else:
+                            st.warning("Informe o nome e selecione um arquivo .docx.")
+
+                if st.session_state.modelos_docx_adicionados:
+                    st.write("**Modelos salvos:**")
+                    for modelo in st.session_state.modelos_docx_adicionados:
+                        col_modelo, col_btn = st.columns([4, 1])
+                        col_modelo.markdown(f"- {modelo['template_name']}")
+                        if col_btn.button("Remover", key=f"rem_modelo_{modelo['id']}"):
+                            user_data_manager.remove_docx_template(user_id, modelo['id'])
+                            st.session_state.user_data_loaded = False
+                            st.rerun()
+                else:
+                    st.caption("Nenhum modelo DOCX salvo ainda.")
+
+            opcoes_modelo_salvo = [m['template_name'] for m in st.session_state.modelos_docx_adicionados]
+            modelo_salvo_nome = st.selectbox(
+                "Ou selecione um modelo cadastrado",
+                options=["-- Nenhum --"] + opcoes_modelo_salvo,
+                index=0
+            )
+
+    arquivo_modelo_os = arquivo_modelo_os_upload
+    if not arquivo_modelo_os and modelo_salvo_nome != "-- Nenhum --":
+        modelo_selecionado = next((m for m in st.session_state.modelos_docx_adicionados if m['template_name'] == modelo_salvo_nome), None)
+        if modelo_selecionado:
+            arquivo_modelo_os = BytesIO(modelo_selecionado['file_content'])
 
     if not arquivo_modelo_os:
-        st.info("📋 Por favor, carregue o Modelo de OS para continuar.")
+        st.info("📋 Faça upload de um Modelo de OS ou selecione um modelo cadastrado para continuar.")
         return
+
+    if hasattr(arquivo_modelo_os, "getvalue"):
+        modelo_doc_bytes = arquivo_modelo_os.getvalue()
+    else:
+        modelo_doc_bytes = arquivo_modelo_os.read()
 
     df_funcionarios = pd.DataFrame()
     if modo_geracao == "Com planilha de funcionários":
@@ -959,7 +1012,7 @@ def main():
                     st.session_state.epis_adicionados,
                     st.session_state.medicoes_adicionadas, 
                     st.session_state.riscos_manuais_adicionados, 
-                    arquivo_modelo_os
+                    modelo_doc_bytes
                 )
                 doc_io = BytesIO()
                 doc.save(doc_io)
