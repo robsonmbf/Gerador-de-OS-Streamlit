@@ -96,6 +96,19 @@ class DatabaseManager:
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
+
+        # Tabela de modelos DOCX do usuário
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_docx_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                template_name TEXT NOT NULL,
+                file_content BLOB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
         
         # Criar índices para melhor performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)')
@@ -105,6 +118,7 @@ class DatabaseManager:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_measurements_user ON user_measurements (user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_epis_user ON user_epis (user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_risks_user ON user_manual_risks (user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_templates_user ON user_docx_templates (user_id)')
         
         conn.commit()
         conn.close()
@@ -162,4 +176,3 @@ class DatabaseManager:
         
         conn.close()
         return activities
-

@@ -327,6 +327,124 @@ class UserDataManager:
         conn.close()
         return True, "Risco manual removido com sucesso"
     
+
+    # ===== GERENCIAMENTO DE MODELOS DOCX =====
+
+    def add_docx_template(self, user_id, template_name, file_content):
+        """Adiciona um modelo DOCX para o usuário"""
+        template_name = sanitize_input(template_name)
+
+        if not template_name:
+            return False, "Nome do modelo é obrigatório", None
+
+        if not file_content:
+            return False, "Arquivo do modelo é obrigatório", None
+
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            '''
+            SELECT id FROM user_docx_templates
+            WHERE user_id = ? AND template_name = ? AND is_active = TRUE
+            ''',
+            (user_id, template_name)
+        )
+
+        if cursor.fetchone():
+            conn.close()
+            return False, "Já existe um modelo ativo com este nome", None
+
+        try:
+            cursor.execute(
+                '''
+                INSERT INTO user_docx_templates (user_id, template_name, file_content)
+                VALUES (?, ?, ?)
+                ''',
+                (user_id, template_name, file_content)
+            )
+
+            template_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+
+            self.db.log_activity(
+                user_id,
+                'add_docx_template',
+                {'template_name': template_name}
+            )
+
+            return True, "Modelo DOCX adicionado com sucesso", template_id
+
+        except Exception as e:
+            conn.close()
+            return False, f"Erro ao adicionar modelo DOCX: {str(e)}", None
+
+    def get_user_docx_templates(self, user_id):
+        """Retorna os modelos DOCX ativos do usuário"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            '''
+            SELECT id, template_name, file_content, created_at
+            FROM user_docx_templates
+            WHERE user_id = ? AND is_active = TRUE
+            ORDER BY template_name
+            ''',
+            (user_id,)
+        )
+
+        templates = []
+        for row in cursor.fetchall():
+            templates.append({
+                'id': row['id'],
+                'template_name': row['template_name'],
+                'file_content': row['file_content'],
+                'created_at': row['created_at']
+            })
+
+        conn.close()
+        return templates
+
+    def remove_docx_template(self, user_id, template_id):
+        """Remove (inativa) um modelo DOCX do usuário"""
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            '''
+            SELECT template_name FROM user_docx_templates
+            WHERE id = ? AND user_id = ? AND is_active = TRUE
+            ''',
+            (template_id, user_id)
+        )
+
+        template = cursor.fetchone()
+        if not template:
+            conn.close()
+            return False, "Modelo DOCX não encontrado"
+
+        cursor.execute(
+            '''
+            UPDATE user_docx_templates
+            SET is_active = FALSE
+            WHERE id = ? AND user_id = ?
+            ''',
+            (template_id, user_id)
+        )
+
+        conn.commit()
+
+        self.db.log_activity(
+            user_id,
+            'remove_docx_template',
+            {'template_id': template_id, 'template_name': template['template_name']}
+        )
+
+        conn.close()
+        return True, "Modelo DOCX removido com sucesso"
+
     # ===== FUNÇÕES AUXILIARES =====
     
     def get_user_summary(self, user_id):
@@ -334,16 +452,19 @@ class UserDataManager:
         measurements = self.get_user_measurements(user_id)
         epis = self.get_user_epis(user_id)
         risks = self.get_user_manual_risks(user_id)
+        templates = self.get_user_docx_templates(user_id)
         activities = self.db.get_user_activities(user_id, limit=10)
         
         return {
             'measurements_count': len(measurements),
             'epis_count': len(epis),
             'manual_risks_count': len(risks),
+            'docx_templates_count': len(templates),
             'recent_activities': activities,
             'measurements': measurements,
             'epis': epis,
-            'manual_risks': risks
+            'manual_risks': risks,
+            'docx_templates': templates
         }
     
     def clear_user_data(self, user_id, data_type='all'):
@@ -369,6 +490,13 @@ class UserDataManager:
             if data_type in ['all', 'risks']:
                 cursor.execute('''
                     UPDATE user_manual_risks
+                    SET is_active = FALSE
+                    WHERE user_id = ?
+                ''', (user_id,))
+
+            if data_type in ['all', 'templates']:
+                cursor.execute('''
+                    UPDATE user_docx_templates
                     SET is_active = FALSE
                     WHERE user_id = ?
                 ''', (user_id,))
