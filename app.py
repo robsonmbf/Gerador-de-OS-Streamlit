@@ -291,6 +291,8 @@ RISCOS_PGR_DADOS = {
     },
 }
 
+DATA_MANAGER_API_VERSION = 2
+
 def get_danos_por_riscos_pgr(categoria, riscos_selecionados):
     """Retorna os danos associados aos riscos selecionados da planilha PGR"""
     if categoria not in RISCOS_PGR_DADOS or not riscos_selecionados:
@@ -306,13 +308,22 @@ def get_danos_por_riscos_pgr(categoria, riscos_selecionados):
     return "; ".join(danos_lista) if danos_lista else ""
 
 @st.cache_resource
-def init_managers():
+def init_managers(api_version=DATA_MANAGER_API_VERSION):
     db_manager = DatabaseManager()
     auth_manager = AuthManager(db_manager)
     user_data_manager = UserDataManager(db_manager)
+
+    # Compatibilidade defensiva para objetos legados em cache
+    if not hasattr(user_data_manager, 'get_user_docx_templates'):
+        user_data_manager.get_user_docx_templates = lambda _user_id: []
+    if not hasattr(user_data_manager, 'add_docx_template'):
+        user_data_manager.add_docx_template = lambda *_args, **_kwargs: (False, 'Funcionalidade indisponível nesta sessão', None)
+    if not hasattr(user_data_manager, 'remove_docx_template'):
+        user_data_manager.remove_docx_template = lambda *_args, **_kwargs: (False, 'Funcionalidade indisponível nesta sessão')
+
     return db_manager, auth_manager, user_data_manager
 
-db_manager, auth_manager, user_data_manager = init_managers()
+db_manager, auth_manager, user_data_manager = init_managers(DATA_MANAGER_API_VERSION)
 
 st.markdown("""
 <style>
@@ -394,6 +405,16 @@ def show_user_info():
             if st.button("Sair", type="secondary"):
                 logout_user()
 
+def carregar_modelos_docx_usuario(user_id):
+    """Carrega modelos DOCX com fallback para ambientes com cache legado."""
+    metodo = getattr(user_data_manager, 'get_user_docx_templates', None)
+    if not callable(metodo):
+        return []
+    try:
+        return metodo(user_id)
+    except Exception:
+        return []
+
 def init_user_session_state():
     if st.session_state.get('authenticated') and not st.session_state.get('user_data_loaded'):
         user_id = st.session_state.user_data.get('user_id')
@@ -401,7 +422,7 @@ def init_user_session_state():
             st.session_state.medicoes_adicionadas = user_data_manager.get_user_measurements(user_id)
             st.session_state.epis_adicionados = user_data_manager.get_user_epis(user_id)
             st.session_state.riscos_manuais_adicionados = user_data_manager.get_user_manual_risks(user_id)
-            st.session_state.modelos_docx_adicionados = user_data_manager.get_user_docx_templates(user_id)
+            st.session_state.modelos_docx_adicionados = carregar_modelos_docx_usuario(user_id)
             st.session_state.user_data_loaded = True
     if 'medicoes_adicionadas' not in st.session_state:
         st.session_state.medicoes_adicionadas = []
@@ -684,7 +705,12 @@ def main():
                     arquivo_modelo_salvar = st.file_uploader("Arquivo .docx para cadastrar", type="docx", key="upload_modelo_salvar")
                     if st.form_submit_button("Salvar modelo"):
                         if nome_modelo_docx and arquivo_modelo_salvar:
-                            sucesso, mensagem, _ = user_data_manager.add_docx_template(
+                            add_template = getattr(user_data_manager, 'add_docx_template', None)
+                            if not callable(add_template):
+                                st.warning('Funcionalidade de modelos DOCX indisponível nesta sessão. Recarregue o app.')
+                                sucesso, mensagem, _ = False, '', None
+                            else:
+                                sucesso, mensagem, _ = add_template(
                                 user_id,
                                 nome_modelo_docx,
                                 arquivo_modelo_salvar.getvalue()
@@ -704,7 +730,11 @@ def main():
                         col_modelo, col_btn = st.columns([4, 1])
                         col_modelo.markdown(f"- {modelo['template_name']}")
                         if col_btn.button("Remover", key=f"rem_modelo_{modelo['id']}"):
-                            user_data_manager.remove_docx_template(user_id, modelo['id'])
+                            remove_template = getattr(user_data_manager, 'remove_docx_template', None)
+                            if not callable(remove_template):
+                                st.warning('Funcionalidade de modelos DOCX indisponível nesta sessão. Recarregue o app.')
+                            else:
+                                remove_template(user_id, modelo['id'])
                             st.session_state.user_data_loaded = False
                             st.rerun()
                 else:
